@@ -14,9 +14,11 @@
     "test:manifest": "node tests/generate-teal-test-manifest.mjs tests/test-manifest.json",
     "mock": "python tests/mock/server.py",
     "docs:capture": "node tests/capture-doc-screenshots.mjs",
+    "docs:build": "node tests/build-manual.mjs",
     "docs:verify": "node tests/verify-public-docs.mjs"
   },
   "devDependencies": {
+    "marked": "17.0.5",
     "playwright-core": "1.62.1"
   }
 }

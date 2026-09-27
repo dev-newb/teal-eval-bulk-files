@@ -1,5 +1,7 @@
 # Human interface guide
 
+For the complete illustrated workflows, see the [user and agent manual](manual.md). This page is a short control reference.
+
 Open a Teal Alpha issue page. In the **Staged files** card, select **Bulk files**. The extension opens one fixed-size dialog. The mode buttons and file area stay in the same position when the mode changes.
 
 ## Upload loose files
