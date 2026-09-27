@@ -1,5 +1,11 @@
 # Changelog
 
+## Documentation - 2026-09-27
+
+- Add an illustrated user manual for upload, API upload, duplicates, download, deletion, confirmations, progress, errors, and stop controls.
+- Explain agent access, one-use plans, the PowerShell wrapper, direct Node module commands, JSON output, exit codes, and component lifetimes.
+- Add an offline HTML edition and reproducible screenshots from a complete fictional eval page in a headless browser.
+
 ## 0.10.0 - 2026-09-26
 
 - Default the agent PowerShell wrapper to API upload plans and inventory reads. Keep apply bound to its saved mode, and retain explicit native fallback.

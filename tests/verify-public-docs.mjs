@@ -50,6 +50,18 @@ function pngDimensions(buffer) {
 }
 
 const failures = [];
+const manualPath = resolve(root, "docs", "manual.md");
+const manual = await readFile(manualPath, "utf8");
+for (const match of manual.matchAll(/!\[[^\]]*\]\((images\/[^)]+)\)/gu)) {
+  const relativePath = `docs/${match[1]}`;
+  if (!expectedImages.includes(relativePath)) expectedImages.push(relativePath);
+}
+for (const match of manual.matchAll(/(?<!!)\[[^\]]+\]\(([^)]+)\)/gu)) {
+  const href = match[1];
+  if (/^(?:https?:|#)/u.test(href)) continue;
+  try { await stat(resolve(root, "docs", href.split("#")[0])); }
+  catch { failures.push(`docs/manual.md: missing link target ${href}.`); }
+}
 for (const path of await collectMarkdown(root)) {
   const content = await readFile(path, "utf8");
   const display = relative(root, path).split(sep).join("/");

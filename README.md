@@ -9,6 +9,8 @@ Teal Eval Bulk Files adds reliable batch file controls to Tacit Teal eval issue 
 
 Current release: `0.10.0`.
 
+**[Read the illustrated user and agent manual](docs/manual.md)** for installation, every file workflow, agent access, and direct `.mjs` CLI use. An [offline HTML edition](docs/manual.html) includes the screenshots in one file; download it and open it in a browser.
+
 ![Complete fictional eval page with the Bulk files control](docs/images/eval-page-overview.png)
 
 ## Start a CLI batch

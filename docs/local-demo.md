@@ -41,15 +41,23 @@ Then run:
 npm run docs:capture
 ```
 
+Build the single offline HTML manual after the screenshots are current:
+
+```powershell
+npm run docs:build
+npm run docs:verify
+```
+
 The capture process:
 
-1. Starts the local fake server in a hidden process.
-2. Copies the extension into the ignored `artifacts/documentation-capture` directory.
-3. Adds the loopback match only to that disposable copy.
-4. Opens the copy's shadow root only so the test can select fictional files and deterministic controls.
-5. Starts Chromium in headless mode with a dedicated temporary profile.
-6. Captures the full page plus upload, download, delete, and CLI example images.
-7. Closes the headless browser and local server.
+1. Starts a loopback-only fictional page and fake staged-file API on an available local port.
+2. Copies the extension into a dedicated temporary directory. It gives only that copy the exact demo origin, an open shadow root for selectors, and a fake browser download terminal event.
+3. Starts Chromium in headless mode with a separate temporary profile. It does not use an existing browser profile or a live Teal issue.
+4. Operates the real extension controls for native and Direct API uploads, ZIP preparation, deletion, confirmations, progress, stops, and terminal states.
+5. Captures a full fictional eval page, each workflow state, and the temporary Chromium extension-management page. The CLI panel is clearly marked as illustrative output.
+6. Writes a per-image action/source receipt to the ignored `artifacts/documentation-capture` directory, then closes the server and browser and removes only its own temporary directory.
+
+The `download-complete.png` and `download-cancelled.png` images show the real extension response to simulated browser terminal events. No native Save As window is pictured. `download-stopped.png` is a different state: the user stops ZIP preparation before Save As starts. The Direct API upload uses only the fake loopback API and fictional bytes.
 
 The production `extension/content.js` keeps its closed shadow root. The screenshot process does not open a foreground window and does not take focus from the user's active application.
 
@@ -67,6 +75,6 @@ The check requires every expected image, verifies PNG dimensions, scans public M
 
 - Use only the local fictional page.
 - Show no real issue ID, task text, rubric, staged file, account, cookie, token, profile path, or private browser endpoint.
-- Capture page content, not browser chrome or the Windows desktop.
+- Capture page content, except for `installation.png`, which shows only the separate temporary Chromium extension-management page.
 - Use placeholders for one-use plan tokens.
 - Reload the local page after a source change before capture.

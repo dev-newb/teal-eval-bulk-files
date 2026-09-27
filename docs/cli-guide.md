@@ -1,5 +1,7 @@
 # CLI and Codex skill guide
 
+For a guided introduction, see [agent use](manual.md#use-the-extension-with-an-agent) and [direct mjs commands](manual.md#advanced-run-the-mjs-cli-yourself) in the illustrated manual.
+
 The CLI lets a terminal, Codex, Claude, or another local agent manage staged files without visual page navigation. It attaches only to an already open allowed issue tab.
 
 ![Fictional plan and apply output](images/cli-plan-example.png)

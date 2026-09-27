@@ -125,6 +125,16 @@
       .criterion { margin-bottom: 9px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 6px; background: #111113; }
       .criterion strong { display: block; margin-bottom: 4px; color: #cfd2ff; }
       .score { float: right; color: var(--muted); font-weight: 500; }
+      .rubric-table { width: 100%; border: 1px solid var(--border); background: #111113; }
+      .rubric-table th { padding: 8px; color: #cfd2ff; text-align: left; background: #1b1b20; }
+      .rubric-table td { padding: 8px; vertical-align: top; line-height: 1.45; }
+      .rubric-table th:last-child, .rubric-table td:last-child { text-align: right; white-space: nowrap; }
+      .answer-card { display: block; height: auto; margin-top: 12px; padding: 12px 13px 13px; }
+      .answer-card h2 { margin: 0 0 5px; font-size: 13px; }
+      .answer-card p { margin: 0 0 9px; color: var(--muted); font-size: 11px; }
+      .answer-card th { text-align: left; color: #cfd2ff; background: #1b1b20; padding: 8px; }
+      .answer-card td { padding: 8px; vertical-align: top; }
+      .answer-card td:last-child { text-align: left; white-space: normal; }
       .staged { margin-top: 12px; padding: 12px 13px 13px; min-width: 320px; }
       .header { margin-bottom: 8px; }
       .header-actions { display: flex; align-items: center; gap: 7px; }
@@ -210,18 +220,30 @@
         <article class="panel-card">
           <div class="panel-header"><div><div class="panel-title">Rubric</div><div class="panel-meta">10 criteria · 100 points</div></div><button class="compact-button" type="button">Edit</button></div>
           <div class="panel-content">
-            <div class="criterion"><strong>1. Sensor coverage <span class="score">14 pts</span></strong>Places temperature and acoustic sensors at the three named fictional process zones.</div>
-            <div class="criterion"><strong>2. Sampling plan <span class="score">12 pts</span></strong>Gives a sampling rate and a reason for each signal type.</div>
-            <div class="criterion"><strong>3. Trial sequence <span class="score">12 pts</span></strong>Defines preparation, monitored cure, and post-cure review steps.</div>
-            <div class="criterion"><strong>4. Conflicting signals <span class="score">12 pts</span></strong>Explains a safe response when the two sensor families disagree.</div>
-            <div class="criterion"><strong>5. Evidence links <span class="score">10 pts</span></strong>Connects key decisions to the appropriate staged file.</div>
-            <div class="criterion"><strong>6. Uncertainty <span class="score">10 pts</span></strong>Marks assumed limits and does not present them as measured facts.</div>
-            <div class="criterion"><strong>7. Acceptance logic <span class="score">10 pts</span></strong>Uses clear pass, review, and stop conditions.</div>
-            <div class="criterion"><strong>8. Data quality <span class="score">8 pts</span></strong>Includes calibration and missing-data checks.</div>
-            <div class="criterion"><strong>9. Concision <span class="score">6 pts</span></strong>Uses the requested compact table and stays within the limit.</div>
-            <div class="criterion"><strong>10. Fiction boundary <span class="score">6 pts</span></strong>Does not imply that the demonstration data are real.</div>
+            <table class="rubric-table"><thead><tr><th>Answer Field</th><th>Relation</th><th>Output</th><th>Points</th></tr></thead><tbody>
+              <tr><td>Sensor plan</td><td>Includes</td><td>Three fictional process zones</td><td>14</td></tr>
+              <tr><td>Sensor plan</td><td>Includes</td><td>A reason for each sample rate</td><td>12</td></tr>
+              <tr><td>Trial plan</td><td>Orders</td><td>Preparation, cure, and review</td><td>12</td></tr>
+              <tr><td>Conflict response</td><td>Explains</td><td>Safe action for different sensor readings</td><td>12</td></tr>
+              <tr><td>Evidence use</td><td>Connects</td><td>Decisions to fictional staged files</td><td>10</td></tr>
+              <tr><td>Uncertainty</td><td>Labels</td><td>Assumed limits as assumptions</td><td>10</td></tr>
+              <tr><td>Acceptance plan</td><td>Defines</td><td>Pass, review, and stop conditions</td><td>10</td></tr>
+              <tr><td>Data quality</td><td>Checks</td><td>Calibration and missing data</td><td>8</td></tr>
+              <tr><td>Answer format</td><td>Uses</td><td>A compact table</td><td>6</td></tr>
+              <tr><td>Fiction boundary</td><td>Avoids</td><td>Claims about a real facility</td><td>6</td></tr>
+            </tbody></table>
           </div>
         </article>
+      </section>
+
+      <section class="answer-card panel-card" aria-label="Expected Answer Table">
+        <h2>Expected Answer Table</h2>
+        <p>Fictional reference rows for this local demonstration. These are not answers to a real evaluation.</p>
+        <table><thead><tr><th>Answer Field</th><th>Answer Options</th><th>Model Output</th></tr></thead><tbody>
+          <tr><td>Sensor layout</td><td>Three sample zones in this fictional exercise</td><td>Zone A: feed; Zone B: cure; Zone C: exit</td></tr>
+          <tr><td>Signal check</td><td>Temperature and acoustic channels</td><td>Use both channels; flag a disagreement for review.</td></tr>
+          <tr><td>Trial decision</td><td>Pass, review, or stop</td><td>State which option applies and identify any assumed limit.</td></tr>
+        </tbody></table>
       </section>
 
       <section class="staged">
@@ -251,7 +273,7 @@
         const deletePromptMode = params.get('deletePrompt') || 'exact';
         const addButton = document.querySelector('.add');
         const input = document.querySelector('.native-input');
-        const tbody = document.querySelector('tbody');
+        const tbody = document.querySelector('.staged tbody');
         const nativeError = document.querySelector('.native-error');
         const encoder = new TextEncoder();
         let pipelineReadyAt = 0;
