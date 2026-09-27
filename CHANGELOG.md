@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.0 - 2026-09-26
+
+- Default the agent PowerShell wrapper to API upload plans and inventory reads. Keep apply bound to its saved mode, and retain explicit native fallback.
+- Include agent instructions in the extension folder so file agents can use its CLI without writing API request code.
+- Allow upload-URL preparation and server registration up to ten minutes within the batch deadline; reconcile late results with bounded read-only checks instead of repeating a POST.
+
+- Add optional API uploads in the extension and CLI while keeping native upload as the default.
+- Bind the chosen upload method to the one-use upload token and extension authorization.
+- Use the signed-in browser for prepare, raw-byte PUT, registration, and fresh inventory verification.
+- Verify complete file hashes and sizes; keep duplicate handling, stop controls, private snapshots, and no-replay rules.
+- Add API inventory reads for list and verify without requiring the native staged-file panel.
+- Keep persistent bridge 0.1.3 and update the wrapper, skill, and API upload guide.
+- Add local fake-service tests for success, rejected requests, uncertain registration, and unchanged table fields.
+
 ## 0.9.8 - 2026-08-17
 
 - Require `chrome-devtools-persistent-gateway` 0.1.3 and keep exact MCP identity checks before browser dispatch.

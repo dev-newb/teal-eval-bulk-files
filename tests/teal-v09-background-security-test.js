@@ -12,6 +12,7 @@ let routed = [];
 let injected = [];
 let mode = "exact";
 let originalConfirmCalls = 0;
+const partialRecords = new Map();
 
 function makeDocument() {
   const removeButton = {
@@ -45,6 +46,10 @@ const context = {
   window: { confirm: originalConfirm },
   document: makeDocument(),
   chrome: {
+    storage: { session: {
+      set: async (values) => { for (const [key, value] of Object.entries(values)) partialRecords.set(key, value); },
+      remove: async (key) => { partialRecords.delete(key); }
+    } },
     runtime: {
       id: "test-extension",
       lastError: null,
@@ -142,6 +147,25 @@ function send(message, from) {
     authorizationId: "11111111-1111-4111-8111-111111111111"
   }));
   assert.equal(injected.length, injectedBeforeDownload, "download commands must not inject a visual confirmation click");
+
+  assert.equal((await send({ ...command, command: "list", uploadMode: "api" }, valid)).ok, true);
+  assert.equal(routed.at(-1).uploadMode, "api");
+  assert.equal((await send({ ...command, command: "list", uploadMode: "arbitrary" }, valid)).ok, false);
+  assert.equal((await send({ ...command, command: "plan-delete", names: ["file.txt"], uploadMode: "api" }, valid)).ok, false);
+  const partial = { type: "teal-eval-bulk-api-partial-v1", record: {
+    issueIdentifier: "TAB-TEST", filename: "file.txt", storageKey: "TAB-TEST/11111111-1111-4111-8111-111111111111/file.txt",
+    byteSize: 5, sha256: "a".repeat(64), page: valid.tab.url, phase: "put_confirmed", recordedAt: 1
+  } };
+  assert.equal((await send(partial, { ...valid, frameId: 1 })).ok, false);
+  assert.equal((await send(partial, { ...valid, id: "another-extension" })).ok, false);
+  assert.equal((await send(partial, sender("https://evil.example/issue/TAB-TEST"))).ok, false);
+  assert.equal((await send({ ...partial, record: { ...partial.record, issueIdentifier: "OTHER-1" } }, valid)).ok, false);
+  assert.equal((await send({ ...partial, record: { ...partial.record, upload_url: "https://secret.example" } }, valid)).ok, false);
+  assert.equal(partialRecords.size, 0);
+  assert.equal((await send(partial, valid)).ok, true);
+  assert.equal(partialRecords.size, 1);
+  assert.equal((await send({ ...partial, record: { ...partial.record, phase: "verified" } }, valid)).ok, true);
+  assert.equal(partialRecords.size, 0);
 
   manifest = { content_scripts: [{ matches: ["<all_urls>", "https://*.example.test/issue/*", "https://platform-teal-alpha.vercel.app/not-issue/*"] }] };
   const wildcardRejected = await send(command, valid);

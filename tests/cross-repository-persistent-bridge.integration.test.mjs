@@ -124,7 +124,7 @@ function resultFor(envelope) {
     ok: true,
     issueIdentifier: 'TAB-TEST',
     persistentBridgeProtocolVersion: 1,
-    extensionVersion: '0.9.8',
+    extensionVersion: '0.10.0',
     documentId,
     targetUrl: pageUrl,
   };
@@ -139,7 +139,7 @@ function resultFor(envelope) {
 function terminalMarker(envelope) {
   const payload = {
     protocolVersion: 1,
-    extensionVersion: '0.9.8',
+    extensionVersion: '0.10.0',
     documentId,
     requestId: envelope.requestId,
     targetUrl: pageUrl,

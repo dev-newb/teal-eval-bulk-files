@@ -5,7 +5,7 @@ description: Manage and verify staged files on Tacit Teal eval issue pages throu
 
 # Teal Eval Bulk CLI
 
-Use the version 0.9.8 CLI in the repository's `extension` directory. Persistent mode requires Chrome DevTools MCP persistent bridge 0.1.3. The wrapper resolves the CLI from, in order:
+Use the version 0.10.0 CLI in the repository's `extension` directory. Persistent mode requires Chrome DevTools MCP persistent bridge 0.1.3. The wrapper resolves the CLI from, in order:
 
 1. the explicit `-ExtensionRoot` value;
 2. `TEAL_EVAL_BULK_EXTENSION_ROOT`;
@@ -14,6 +14,12 @@ Use the version 0.9.8 CLI in the repository's `extension` directory. Persistent 
 Read [references/cli-contract.md](references/cli-contract.md) before the first non-read-only operation in a conversation or when browser selection, CDP setup, or result handling is unclear.
 
 For all agent-driven Teal file work, use `scripts/invoke-teal-cli.ps1` with `-PersistentBridgePath`. Do not start a separate `chrome-devtools-mcp` process or a Claude `--chrome` session. Those clients bypass the shared lease and can cause repeated Chrome approval prompts. Direct wrapper modes are for an explicit operator fallback only.
+
+## Choose the upload method
+
+For agent work, use the CLI wrapper and let the extension handle the API. The wrapper defaults to API mode for `plan-upload`, `list`, and `verify`. Use `-UploadMode native` only for an explicit native fallback. The raw Node CLI and the human interface keep their native defaults; pass `--upload-mode api` when calling Node directly. API mode uses the existing browser login and fixed upload endpoints.
+
+Apply inherits the method from its one-use token. Do not switch methods between plan and apply. After API upload, use `list -UploadMode api` for fresh server inventory; the native page table can remain stale. Use `verify -UploadMode api` only for an exact complete file set. See [references/api-upload.md](references/api-upload.md) for commands and result handling.
 
 ## Start with a batch
 
@@ -68,7 +74,7 @@ Treat `actionableFiles` as the approved manifest. After apply, run `list`. For e
 
 1. Require an exact issue ID such as `DEMO-204` from the user, current-tab context, or one selected discovered target.
 2. Run `status`, then `list`, against the selected session and issue. Stop if the returned issue ID, target, extension bridge, or inventory does not match.
-3. Treat a missing or loading staged-files panel as an observation failure. `list`, all plans, and `verify` require a present ready panel. A present ready panel with no rows is a valid empty inventory. Each plan uses one strict refreshed observation for row selection and inventory.
+3. API-mode upload plans, list, and verify require a valid fresh API inventory and do not require the native panel. Native-mode operations and download/delete plans require a present ready staged-files panel. A missing or loading panel is not an empty inventory. A present ready panel with no rows is a valid empty inventory.
 4. Report that uploads cause Teal to post one Linear comment for each finalized file.
 5. Confirm that upload source paths exist and are loose files. Do not accept directories.
 6. For download or deletion, show the exact requested names from the current inventory.
@@ -158,4 +164,4 @@ Use `stop` immediately when the user asks to stop an active batch. Do not wait f
 - Do not expose cookies, tokens, authorization headers, profile secrets, private browser WebSocket paths, or unrelated tab URLs.
 - Do not use a real Teal issue for testing. Use only the repository's fictional local demo issue in a dedicated temporary profile when a test is explicitly requested.
 
-The current human interface already shows SHA-256 prefixes in delete review and per-file progress during batch work. Version 0.9.8 does not change the visual interface.
+The current human interface already shows SHA-256 prefixes in delete review and per-file progress during batch work. Version 0.10.0 adds an Upload method selector for native or Direct API upload.

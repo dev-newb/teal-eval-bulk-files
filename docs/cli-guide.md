@@ -30,8 +30,10 @@ Keep `actionableFiles` as the approved manifest. After apply, run `list`. For ea
 
 ## Requirements
 
+The agent wrapper defaults to API mode for `plan-upload`, `list`, and `verify`. Apply inherits the chosen method from its token. Use `-UploadMode native` for a deliberate fallback. The raw Node CLI retains its native default, so pass `--upload-mode api` when using it directly. See [API upload mode](api-upload.md) for a complete example and failure handling.
+
 - Node.js 24
-- Teal Eval Bulk Files `0.9.8` loaded unpacked in Chrome or Microsoft Edge
+- Teal Eval Bulk Files `0.10.0` loaded unpacked in Chrome or Microsoft Edge
 - Chrome DevTools MCP persistent bridge `0.1.3` for persistent mode
 - An open Teal Alpha issue tab
 - The selected browser's protected local debugging bridge enabled
@@ -235,4 +237,4 @@ The CLI recognizes `daemon_absent` only from the real proxy's bounded, exact sta
 
 Never print browser WebSocket paths, extension authorization IDs, cookies, or unrelated tab URLs.
 
-The current human interface already shows SHA-256 prefixes in delete review and per-file progress during batch work. Version 0.9.8 has no visual interface change.
+The current human interface already shows SHA-256 prefixes in delete review and per-file progress during batch work. Version 0.10.0 adds an Upload method selector for native or Direct API upload.

@@ -6,7 +6,7 @@
 - CLI: `extension/teal-eval-bulk-cli.mjs`
 - Persistent-bridge client module: `extension/persistent-mcp-client.mjs`
 - Extension README: `README.md`
-- Required extension version: `0.9.8`
+- Required extension version: `0.10.0`
 - Required persistent gateway: `chrome-devtools-persistent-gateway` version `0.1.3`
 - Node.js requirement: version 24
 
@@ -59,6 +59,8 @@ When no session is named, always ask after read-only discovery. Do not select th
 
 ## Commands
 
+Optional `--upload-mode native|api` (wrapper `-UploadMode`) is supported only on `plan-upload`, `apply-upload`, `list`, and `verify`. The agent wrapper defaults to API for planning and inventory reads. The raw Node CLI keeps native as its default. Apply inherits the saved mode when omitted and rejects an explicit mismatch. Mode is part of upload-token authority. API-mode inventory comes from a fresh API read rather than the native table. See [api-upload.md](api-upload.md).
+
 All commands require `--issue` plus exactly one connection choice: `--persistent-bridge <absolute-stdio-proxy-path>`, `--cdp`, or `--browser chrome|edge`. `--bridge-wait-seconds` is optional only with `--persistent-bridge`. It defaults to 120 and accepts one canonical ASCII base-10 integer from 1 through 300. `--user-data-dir` is optional only with `--browser`. `--target-id` is optional and is a safe bounded target ID. The portable PowerShell wrapper maps these to mandatory `-PersistentBridgePath`, `-CdpEndpoint`, and `-Browser` parameter sets, plus optional persistent-only `-BridgeWaitSeconds` and optional `-TargetId`. Its operand aliases are `-Names`, `-Files`, `-Paths`, and `-PlanToken`. It has no persistent-bridge path default.
 
 Persistent mode starts `node <absolute-stdio-proxy-path> chrome-devtools --lease-wait-ms N`, where `N` is the validated seconds value times 1000. The initial `list_pages` request timeout is `N` plus 45 seconds. No other tool timeout receives the queue budget. After the lease is acquired, `select_page` and the target tool remain in the same session. A queue timeout is the authenticated `lease_busy` or `held_unknown` result with `dispatched: false`. It exits `3`, is not indeterminate, and does not cause automatic confirmation, resend, or apply replay. If an apply already claimed its one-use token, the error also has `tokenConsumed: true`; the token stays consumed. Ambiguous transport failures keep the existing indeterminate apply rules.
@@ -110,7 +112,7 @@ The human extension interface keeps its own closed-shadow confirmation controls.
 
 Before a fresh delete plan, the default skill workflow offers and recommends a separate exact-name `plan-download` and `apply-download` backup. A cancelled or uncertain backup blocks delete unless the user explicitly declines that backup. This does not remove the human Confirm/Cancel controls for human-interface batches.
 
-Never click the page's native **remove** control. If duplicate rows are ambiguous, ask the human operator to use that native control. The current interface already shows SHA-256 prefixes in delete review and per-file progress. Version 0.9.8 has no visual interface change.
+Never click the page's native **remove** control. If duplicate rows are ambiguous, ask the human operator to use that native control. The current interface already shows SHA-256 prefixes in delete review and per-file progress. Version 0.10.0 adds an Upload method selector for native or Direct API upload.
 
 ## Connection examples
 

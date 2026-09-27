@@ -5,7 +5,7 @@ import { basename, isAbsolute, resolve } from "node:path";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const PERSISTENT_BRIDGE_PROTOCOL_VERSION = 1;
-const PERSISTENT_BRIDGE_EXTENSION_VERSION = "0.9.8";
+const PERSISTENT_BRIDGE_EXTENSION_VERSION = "0.10.0";
 const PERSISTENT_GATEWAY_NAME = "chrome-devtools-persistent-gateway";
 const PERSISTENT_GATEWAY_VERSION = "0.1.3";
 const DEFAULT_LEASE_WAIT_MS = 120_000;
@@ -666,6 +666,11 @@ class PersistentBridgeClient {
 
   async callBridge(command, options = {}) {
     if (!isPlainObject(command) || typeof command.command !== "string") throw new Error("The persistent bridge command was invalid.");
+    if (Object.prototype.hasOwnProperty.call(command, "uploadMode")
+      && (!["list", "prepare-upload", "plan-upload", "apply-upload"].includes(command.command)
+        || !["native", "api"].includes(command.uploadMode))) {
+      throw new Error("The persistent bridge upload mode was invalid for this command.");
+    }
     const requestId = this.createRequestId();
     const initial = options.initial === true;
     const commandUid = await this.resolveControlUid(COMMAND_CONTROL_NAME);
@@ -713,7 +718,8 @@ class PersistentBridgeClient {
     return this;
   }
 
-  async uploadFiles(filePaths, { beforeFileSelection, afterFileSelection } = {}) {
+  async uploadFiles(filePaths, { beforeFileSelection, afterFileSelection, uploadMode = "native" } = {}) {
+    if (!["native", "api"].includes(uploadMode)) throw new Error("The persistent upload mode was invalid.");
     if (!Array.isArray(filePaths) || !filePaths.length) throw new Error("apply-upload requires at least one local file path.");
     const resolvedPaths = [];
     const names = [];
@@ -731,7 +737,7 @@ class PersistentBridgeClient {
       names.push(name);
     }
     let selectedFileCount = 0;
-    const prepared = await this.callBridge({ command: "prepare-upload" }, { timeoutMs: 30_000 });
+    const prepared = await this.callBridge({ command: "prepare-upload", ...(uploadMode === "api" ? { uploadMode } : {}) }, { timeoutMs: 30_000 });
     if (prepared.result?.ok !== true) throw new Error(prepared.result?.error || "The extension did not prepare the CLI upload selection.");
     try {
       for (const filePath of resolvedPaths) {

@@ -7,11 +7,13 @@ Teal Eval Bulk Files adds reliable batch file controls to Tacit Teal eval issue 
 - a Codex skill that selects an open browser session and calls the CLI;
 - a complete local-only demonstration page and repeatable screenshot tests.
 
-Current release: `0.9.8`.
+Current release: `0.10.0`.
 
 ![Complete fictional eval page with the Bulk files control](docs/images/eval-page-overview.png)
 
 ## Start a CLI batch
+
+The agent wrapper uses API mode by default for upload plans and inventory reads. The extension handles the API in the selected logged-in browser. Apply inherits the plan's mode. Use `-UploadMode native` for a deliberate native fallback. Agents that have only the extension folder can read its [AGENTS.md](extension/AGENTS.md).
 
 Use one plan for all requested files. Keep the returned `actionableFiles` as the approved filename and SHA-256 manifest. Apply its one-use token. Then run `list` and require exactly one staged row for each complete manifest filename and SHA-256 value.
 
@@ -36,6 +38,7 @@ Use `verify` only when the local paths are the complete intended replacement set
 ## Main features
 
 - Drag several loose files into one upload target.
+- Choose native page upload or the optional [API upload method](docs/api-upload.md).
 - Skip duplicate filenames and continue with new files.
 - Download selected staged files in one ZIP and use one Save As dialog.
 - Select staged files with checkboxes before deletion.
@@ -81,7 +84,7 @@ If the skill is not kept beside the repository's `extension` directory, set `TEA
 
 The CLI attaches to an already open browser session. It does not launch a browser, log in, or navigate. Select the exact browser or session first. The wrapper then requires exactly one transport: an explicit persistent stdio-proxy path, a current Chrome or Edge session, or an explicit loopback CDP endpoint.
 
-The [Chrome DevTools MCP persistent bridge](https://github.com/esmaesx/chrome-devtools-mcp-persistent-bridge) is an optional transport for a user-selected Chrome session. Teal Eval Bulk Files 0.9.8 requires bridge 0.1.3. Keep the bridge checkout separate from this repository, and pass the absolute path to its `runtime/stdio-proxy.mjs` file. The portable wrapper has no machine-specific path default:
+The [Chrome DevTools MCP persistent bridge](https://github.com/esmaesx/chrome-devtools-mcp-persistent-bridge) is an optional transport for a user-selected Chrome session. Teal Eval Bulk Files 0.10.0 requires bridge 0.1.3. Keep the bridge checkout separate from this repository, and pass the absolute path to its `runtime/stdio-proxy.mjs` file. The portable wrapper has no machine-specific path default:
 
 ```powershell
 & .\skill\scripts\invoke-teal-cli.ps1 `
@@ -154,7 +157,7 @@ See [CLI guide](docs/cli-guide.md) for browser selection, every command, JSON fi
 
 Local browser debugging is trusted local mutation authority. The plan controls prevent accidental or stale applies. They cannot protect a debugging session from another hostile local process that already controls it.
 
-The current interface already shows SHA-256 prefixes in delete review and per-file progress. Version 0.9.8 has no visual interface change.
+The current interface already shows SHA-256 prefixes in delete review and per-file progress. Version 0.10.0 adds an Upload method selector for native or Direct API upload.
 
 ## Documentation
 
