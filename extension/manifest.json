@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Teal Eval Bulk Files",
-  "version": "0.9.8",
+  "version": "0.10.0",
   "description": "Adds safe bulk upload, bulk download, and bulk delete controls to Teal Alpha eval issue pages.",
   "permissions": [
     "downloads",
@@ -24,6 +24,7 @@
         "bridge-plan-store.js",
         "delete-apply-envelope.js",
         "upload-lifetime.js",
+        "api-upload.js",
         "content.js"
       ],
       "run_at": "document_idle"

@@ -13,7 +13,7 @@ Open a Teal Alpha issue page. In the **Staged files** card, select **Bulk files*
 5. Select the upload button.
 6. Review the exact selection in the extension confirmation and select **Confirm**.
 
-The Teal platform posts one Linear comment when it finalizes each uploaded file. The extension uploads one file at a time through the page's existing control.
+The Teal platform posts one Linear comment when it finalizes each uploaded file. The extension uploads one file at a time. The default **Native page** method uses the page's existing control. Select **Direct API** under **Upload method** to use the upload API and verify the saved hash and size. See [API upload mode](api-upload.md).
 
 ### Duplicate handling
 

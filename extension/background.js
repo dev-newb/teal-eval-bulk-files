@@ -5,6 +5,7 @@ const ZIP_TERMINAL_MESSAGE = "teal-eval-bulk-zip-terminal-v1";
 const COMMAND_REQUEST_MESSAGE = "teal-eval-bulk-command-v1";
 const COMMAND_EXECUTE_MESSAGE = "teal-eval-bulk-command-execute-v1";
 const NATIVE_DELETE_MESSAGE = "teal-eval-bulk-native-delete-v1";
+const API_PARTIAL_MESSAGE = "teal-eval-bulk-api-partial-v1";
 const ISSUE_PATH_PATTERN = /^\/issue\/([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\/?$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9-]{16,80}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -118,10 +119,13 @@ function validateCommandMessage(message, sender) {
   const senderIssue = senderIssueIdentifier(sender);
   if (!senderIssue) return "The command did not come from the top frame of an allowed issue page.";
   if (!message || typeof message !== "object" || message.type !== COMMAND_REQUEST_MESSAGE) return "The command was invalid.";
-  const allowedKeys = new Set(["type", "command", "issueIdentifier", "names", "authorizationId"]);
+  const allowedKeys = new Set(["type", "command", "issueIdentifier", "names", "authorizationId", "uploadMode"]);
   if (!Object.keys(message).every((key) => allowedKeys.has(key))) return "The command contained an unsupported field.";
   if (!ALLOWED_COMMANDS.has(message.command)) return "The command was not allowed.";
   if (message.issueIdentifier !== senderIssue) return "The command issue identifier did not match this page.";
+  if (Object.prototype.hasOwnProperty.call(message, "uploadMode") &&
+      (!new Set(["list", "prepare-upload", "plan-upload", "apply-upload"]).has(message.command) ||
+       !["native", "api"].includes(message.uploadMode))) return "The upload method was invalid for this command.";
   const needsNames = ["plan-upload", "apply-upload", "plan-download", "apply-download", "plan-delete", "apply-delete"].includes(message.command);
   const needsAuthorization = ["apply-upload", "apply-download", "apply-delete"].includes(message.command);
   if (!needsNames && Object.prototype.hasOwnProperty.call(message, "names")) return "This command cannot include names.";
@@ -282,6 +286,7 @@ async function routeCommand(message, sender) {
     const execution = { type: COMMAND_EXECUTE_MESSAGE, command: message.command, issueIdentifier: message.issueIdentifier };
     if (Object.prototype.hasOwnProperty.call(message, "names")) execution.names = [...message.names];
     if (Object.prototype.hasOwnProperty.call(message, "authorizationId")) execution.authorizationId = message.authorizationId;
+    if (Object.prototype.hasOwnProperty.call(message, "uploadMode")) execution.uploadMode = message.uploadMode;
     const result = await chrome.tabs.sendMessage(sender.tab.id, execution, { frameId: 0 });
     if (result && typeof result === "object") return result;
     return isApply
@@ -292,6 +297,31 @@ async function routeCommand(message, sender) {
     return isApply
       ? { ok: false, indeterminate: true, error: `The ${message.command} command was dispatched, but its response channel failed. The operation may still be running. ${detail}` }
       : { ok: false, error: detail };
+  }
+}
+
+async function recordApiPartial(message, sender) {
+  const context = senderIssueContext(sender);
+  const record = message?.record;
+  const keys = record && typeof record === "object" ? Object.keys(record).sort() : [];
+  const expected = ["byteSize", "filename", "issueIdentifier", "page", "phase", "recordedAt", "sha256", "storageKey"].sort();
+  if (!context || !record || keys.length !== expected.length || keys.some((key, index) => key !== expected[index]) ||
+      record.issueIdentifier !== context.issueIdentifier || !validateFilename(record.filename) ||
+      !SHA256_PATTERN.test(record.sha256 || "") || !Number.isSafeInteger(record.byteSize) || record.byteSize < 0 ||
+      !Number.isSafeInteger(record.recordedAt) || record.recordedAt < 0 ||
+      !["prepared", "put_confirmed", "registered_unverified", "registration_uncertain", "verified"].includes(record.phase) ||
+      typeof record.storageKey !== "string" ||
+      !new RegExp(`^${context.issueIdentifier}/[0-9a-f-]{36}/${record.filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i").test(record.storageKey) ||
+      typeof record.page !== "string" || issueIdentifierFromUrl(record.page) !== context.issueIdentifier) {
+    return { ok: false, error: "The API upload state record was invalid." };
+  }
+  const key = `tealApiUploadPartial:${context.issueIdentifier}:${record.storageKey}`;
+  try {
+    if (record.phase === "verified") await chrome.storage.session.remove(key);
+    else await chrome.storage.session.set({ [key]: record });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "The browser could not retain the API upload state." };
   }
 }
 
@@ -314,6 +344,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message?.type === NATIVE_DELETE_MESSAGE) {
     performNativeDelete(message, sender).then(sendResponse);
+    return true;
+  }
+  if (message?.type === API_PARTIAL_MESSAGE) {
+    recordApiPartial(message, sender).then(sendResponse);
     return true;
   }
   return false;

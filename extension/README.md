@@ -7,6 +7,7 @@ It supports:
 - multi-select upload of loose files;
 - drag-and-drop upload of multiple loose files;
 - sequential upload through the page's existing file control;
+- optional Direct API upload using the same browser login, with full hash and size verification;
 - a selectable staged-file list;
 - verified bulk download as one ZIP with one Edge Save As dialog;
 - an in-extension Confirm/Cancel review for each upload or delete batch;
@@ -51,9 +52,11 @@ The files in this folder are updated in place. Open `edge://extensions`, select 
 
 For uploads, drag loose files onto the drop zone or use **Choose files**. Folders are rejected.
 
+Select **Direct API** under **Upload method** to upload through the staged-file API. Native page upload remains the human-interface default. API mode checks server inventory directly and does not reload the page or change unsaved table fields. The agent PowerShell wrapper defaults to API for upload planning, list, and verify. Apply uses the returned token's mode. The raw Node CLI needs explicit `--upload-mode api`. See [AGENTS.md](AGENTS.md) for the agent workflow. The native page table can remain stale until you refresh it.
+
 For uploads, files whose names are already staged are marked and skipped. Other selected files continue. If the selection contains the same new filename more than once, the extension uploads the first copy and skips the later copies.
 
-After each successful upload, the extension waits until the new staged row, the **Add file** button, and the native file input remain ready together. This prevents the next file from starting while Teal is still finishing the prior file. If Teal still reports an error, the extension stops safely and keeps the failed and unstarted files selected for a manual retry.
+After each native upload, the extension waits until the new staged row, the **Add file** button, and the native file input remain ready together. API mode checks the fresh server inventory instead. Registration can wait up to ten minutes within the batch deadline. If its result is uncertain, the extension performs bounded read-only checks without repeating registration.
 
 For downloads, select the staged files and choose **Download selected files as ZIP**. The extension verifies each selected file against the current Teal staged-file API, including Teal's `byte_size` field, reads the selected files, and builds one uncompressed ZIP locally in the browser. Edge then opens exactly one **Save As** dialog for the ZIP. Four selected files produce one ZIP and one dialog.
 
@@ -65,11 +68,11 @@ If the page shows two rows with the same filename and SHA-256 value, the extensi
 
 For deletions, the final confirmation shows the exact filename and the first eight characters of its SHA-256 value. After confirmation, a five-second countdown starts before the first deletion. Choose **Stop deletion** during the countdown to delete nothing and keep the full selection. Choose it after deletion starts to finish only the current file and keep all later files selected. The extension also stops if the page changes before it can delete the exact next row.
 
-The current interface already shows SHA-256 prefixes in delete review and per-file progress during upload, download, and delete work. Version 0.9.8 has no visual interface change.
+The current interface already shows SHA-256 prefixes in delete review and per-file progress during upload, download, and delete work. Version 0.10.0 adds an Upload method selector for native or Direct API upload.
 
 ## Local CLI (optional)
 
-`teal-eval-bulk-cli.mjs` is a dependency-free Node 24 tool for an already open browser. Version 0.9.8 supports planned upload, download, deletion, and read-only verification through an optional persistent MCP transport. It requires Chrome DevTools MCP persistent bridge 0.1.3. Keep the bridge checkout separate from this repository. The transport uses the reviewed stdio proxy and the existing long-running Chrome backend. It does not read the daemon token or connect to the daemon pipe. It does not launch a browser, open a tab, navigate a page, read cookies, or read credential stores.
+`teal-eval-bulk-cli.mjs` is a dependency-free Node 24 tool for an already open browser. Version 0.10.0 supports planned upload, download, deletion, and read-only verification through an optional persistent MCP transport. It requires Chrome DevTools MCP persistent bridge 0.1.3. Keep the bridge checkout separate from this repository. The transport uses the reviewed stdio proxy and the existing long-running Chrome backend. It does not read the daemon token or connect to the daemon pipe. It does not launch a browser, open a tab, navigate a page, read cookies, or read credential stores.
 
 ```text
 node teal-eval-bulk-cli.mjs --persistent-bridge <path-to-stdio-proxy.mjs> --issue DEMO-204 status

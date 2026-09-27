@@ -50,11 +50,82 @@ test("PowerShell wrapper source preserves aliases, transport parameter sets, and
   assert.match(wrapperSource, /ParameterSetName\s*=\s*'Cdp'[\s\S]*?\$CdpEndpoint/u);
   assert.match(wrapperSource, /ParameterSetName\s*=\s*'Browser'[\s\S]*?\$Browser/u);
   assert.match(wrapperSource, /\[Alias\('Names',\s*'Files',\s*'Paths',\s*'PlanToken'\)\][\s\S]*?\$Operands/u);
-  assert.match(wrapperSource, /\$manifest\.version\s*-ne\s*'0\.9\.8'/u);
+  assert.match(wrapperSource, /\$manifest\.version\s*-ne\s*'0\.10\.0'/u);
   assert.match(wrapperSource, /'--persistent-bridge',\s*\$resolvedPersistentBridgePath/u);
   assert.match(wrapperSource, /'--bridge-wait-seconds',\s*\[string\]\$BridgeWaitSeconds/u);
   assert.match(wrapperSource, /'--target-id',\s*\$TargetId/u);
   assert.match(wrapperSource, /TryCreate\(\$PersistentBridgePath,\s*\[UriKind\]::Absolute/u);
+  assert.match(wrapperSource, /\$Command\s*-in\s*@\('list',\s*'plan-upload',\s*'verify'\)/u);
+});
+
+test("PowerShell wrapper defaults agent inventory and planning to API but keeps apply token-bound", {
+  concurrency: false,
+  skip: process.platform === "win32" ? false : "Windows PowerShell 5.1 is required for the wrapper process test."
+}, async () => {
+  const temp = await mkdtemp(join(tmpdir(), "teal-wrapper-api-default-"));
+  try {
+    const statePath = join(temp, "tokens.json");
+    const fakeStatePath = join(temp, "proxy.json");
+    const env = { TEAL_FAKE_MCP_STATE: fakeStatePath };
+    const common = ["-PersistentBridgePath", fakeProxyPath, "-Issue", "TAB-TEST", "-ExtensionRoot", extensionRoot, "-StatePath", statePath];
+    const call = async (...args) => {
+      const run = await runPowerShell([...common, ...args], env);
+      return { ...run, json: parseOnlyJson(run.stdout) };
+    };
+
+    const listApi = await call("-Command", "list");
+    assert.equal(listApi.code, 0, listApi.stderr);
+    assert.equal(listApi.json.uploadMode, "api");
+    assert.deepEqual(listApi.json.inventory, []);
+    const listNative = await call("-Command", "list", "-UploadMode", "native");
+    assert.equal(listNative.code, 0, listNative.stderr);
+    assert.equal(listNative.json.uploadMode, "native");
+    assert.equal(listNative.json.inventory.length, 4);
+
+    const apiPath = join(temp, "agent-api.txt");
+    await writeFile(apiPath, "API mode from the wrapper", "utf8");
+    const apiPlan = await call("-Command", "plan-upload", "-Paths", apiPath);
+    assert.equal(apiPlan.code, 0, apiPlan.stderr);
+    assert.equal(apiPlan.json.uploadMode, "api");
+    const apiApply = await call("-Command", "apply-upload", "-PlanToken", apiPlan.json.token);
+    assert.equal(apiApply.code, 0, apiApply.stderr);
+    assert.equal(apiApply.json.uploadMode, "api");
+    assert.deepEqual(apiApply.json.succeeded, ["agent-api.txt"]);
+    const apiVerify = await call("-Command", "verify", "-Paths", apiPath);
+    assert.equal(apiVerify.code, 0, apiVerify.stderr);
+    assert.equal(apiVerify.json.uploadMode, "api");
+    assert.deepEqual(apiVerify.json.matched.map((entry) => entry.filename), ["agent-api.txt"]);
+
+    const nativePath = join(temp, "agent-native.txt");
+    await writeFile(nativePath, "explicit native mode", "utf8");
+    const nativePlan = await call("-Command", "plan-upload", "-Paths", nativePath, "-UploadMode", "native");
+    assert.equal(nativePlan.code, 0, nativePlan.stderr);
+    assert.equal(nativePlan.json.uploadMode, "native");
+    const nativeApply = await call("-Command", "apply-upload", "-PlanToken", nativePlan.json.token);
+    assert.equal(nativeApply.code, 0, nativeApply.stderr);
+    assert.equal(nativeApply.json.uploadMode, "native");
+    assert.deepEqual(nativeApply.json.succeeded, ["agent-native.txt"]);
+
+    for (const command of ["status", "stop"]) {
+      const plain = await call("-Command", command);
+      assert.equal(plain.code, 0, plain.stderr);
+    }
+    const downloadPlan = await call("-Command", "plan-download", "-Names", "existing-beta.csv");
+    assert.equal(downloadPlan.code, 0, downloadPlan.stderr);
+    const deletePlan = await call("-Command", "plan-delete", "-Names", "existing-beta.csv");
+    assert.equal(deletePlan.code, 0, deletePlan.stderr);
+
+    const fake = JSON.parse(await readFile(fakeStatePath, "utf8"));
+    const commands = fake.commandEnvelopes.map((item) => item.command);
+    for (const command of commands.filter((item) => ["status", "stop", "plan-download", "plan-delete"].includes(item.command))) {
+      assert.equal(Object.hasOwn(command, "uploadMode"), false);
+    }
+    assert.equal(commands.some((item) => item.command === "prepare-upload" && item.uploadMode === "api"), true);
+    assert.equal(commands.some((item) => item.command === "apply-upload" && item.uploadMode === "api"), true);
+    assert.equal(commands.some((item) => item.command === "apply-upload" && !Object.hasOwn(item, "uploadMode")), true);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
 });
 
 test("PowerShell wrapper preserves persistent mapping, parameter sets, version gate, and CLI failures", {
@@ -173,7 +244,7 @@ test("PowerShell wrapper preserves persistent mapping, parameter sets, version g
       "-ExtensionRoot", oldExtensionRoot
     ], { TEAL_FAKE_MCP_STATE: join(temp, "old-version.fake") });
     assert.notEqual(oldVersion.code, 0);
-    assert.match(oldVersion.stderr, /requires Teal Eval Bulk Files 0\.9\.8\. Found 0\.9\.3/iu);
+    assert.match(oldVersion.stderr, /requires Teal Eval Bulk Files 0\.10\.0\. Found 0\.9\.3/iu);
     assert.equal(oldVersion.stdout, "");
 
     const failedApply = await runPowerShell([

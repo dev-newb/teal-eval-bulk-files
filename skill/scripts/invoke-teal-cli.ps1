@@ -28,6 +28,9 @@ param(
     [Alias('Names', 'Files', 'Paths', 'PlanToken')]
     [string[]]$Operands = @(),
 
+    [ValidateSet('native', 'api')]
+    [string]$UploadMode = '',
+
     [string]$StatePath = '',
 
     [ValidateRange(1, 3600)]
@@ -41,6 +44,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($PSBoundParameters.ContainsKey('UploadMode') -and $Command -notin @('list', 'plan-upload', 'apply-upload', 'verify')) {
+    throw 'UploadMode can be used only with list, plan-upload, apply-upload, or verify.'
+}
 
 if (-not $ExtensionRoot) {
     if ($env:TEAL_EVAL_BULK_EXTENSION_ROOT) {
@@ -66,8 +73,8 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
 }
 
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($manifest.version -ne '0.9.8') {
-    throw "This skill requires Teal Eval Bulk Files 0.9.8. Found $($manifest.version)."
+if ($manifest.version -ne '0.10.0') {
+    throw "This skill requires Teal Eval Bulk Files 0.10.0. Found $($manifest.version)."
 }
 
 $node = Get-Command node -ErrorAction Stop
@@ -102,6 +109,11 @@ if ($StatePath) {
 }
 if ($TargetId) {
     $arguments += @('--target-id', $TargetId)
+}
+if ($PSBoundParameters.ContainsKey('UploadMode')) {
+    $arguments += @('--upload-mode', $UploadMode)
+} elseif ($Command -in @('list', 'plan-upload', 'verify')) {
+    $arguments += @('--upload-mode', 'api')
 }
 $arguments += $Command
 $arguments += $Operands

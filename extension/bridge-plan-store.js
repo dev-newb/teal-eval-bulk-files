@@ -28,7 +28,7 @@
       return authorizationId;
     }
 
-    function consume({ authorizationId, operation, names }) {
+    function take({ authorizationId, operation, names, uploadMode = "native" }) {
       if (!authorizationPattern.test(authorizationId || "")) {
         throw new Error("The CLI plan authorization was invalid.");
       }
@@ -40,13 +40,31 @@
       if (plan.operation !== operation || JSON.stringify(plan.requestedNames) !== JSON.stringify(requestedNames)) {
         throw new Error("The CLI plan authorization did not match this operation or file list.");
       }
-      if (JSON.stringify(plan.inventory) !== JSON.stringify(getInventory())) {
+      if (operation === "upload" && (plan.uploadMode || "native") !== uploadMode) {
+        throw new Error("The CLI plan authorization did not match the upload method.");
+      }
+      return plan;
+    }
+
+    function checkInventory(plan, inventory) {
+      if (JSON.stringify(plan.inventory) !== JSON.stringify(inventory)) {
         throw new Error("The staged-file inventory changed after planning. No mutation was started.");
       }
       return plan;
     }
 
-    return Object.freeze({ create, consume });
+    function consume(request) {
+      const plan = take(request);
+      return checkInventory(plan, Object.prototype.hasOwnProperty.call(request, "inventory") ? request.inventory : getInventory());
+    }
+
+    async function consumeAsync({ readInventory, ...request }) {
+      if (typeof readInventory !== "function") throw new Error("The CLI inventory reader was invalid.");
+      const plan = take(request);
+      return checkInventory(plan, await readInventory());
+    }
+
+    return Object.freeze({ create, consume, consumeAsync });
   }
 
   Object.defineProperty(globalThis, "TealEvalBridgePlanStore", {

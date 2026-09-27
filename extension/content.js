@@ -27,11 +27,12 @@
   const COMMAND_REQUEST_MESSAGE = "teal-eval-bulk-command-v1";
   const COMMAND_EXECUTE_MESSAGE = "teal-eval-bulk-command-execute-v1";
   const NATIVE_DELETE_MESSAGE = "teal-eval-bulk-native-delete-v1";
+  const API_PARTIAL_MESSAGE = "teal-eval-bulk-api-partial-v1";
   const BRIDGE_GLOBAL = "__TEAL_EVAL_BULK_V09_BRIDGE__";
   const BRIDGE_PLAN_TTL_MS = 60 * 60 * 1000;
   const BRIDGE_AUTHORIZATION_PATTERN = /^[A-Za-z0-9-]{16,80}$/;
   const PERSISTENT_BRIDGE_PROTOCOL_VERSION = 1;
-  const PERSISTENT_BRIDGE_EXTENSION_VERSION = "0.9.8";
+  const PERSISTENT_BRIDGE_EXTENSION_VERSION = "0.10.0";
   const PERSISTENT_BRIDGE_REQUEST_PATTERN = /^[A-Za-z0-9_-]{16,80}$/;
   const PERSISTENT_BRIDGE_UPLOAD_TTL_MS = 5 * 60 * 1000;
   const PERSISTENT_BRIDGE_RESULT_TTL_MS = 15 * 60 * 1000;
@@ -160,6 +161,9 @@
         grid-template-rows: 58px minmax(0, 1fr) 34px auto;
         gap: 8px;
       }
+      .upload-method-label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+      .upload-method { color: var(--eval-text); background: var(--eval-bg); border: 1px solid var(--eval-border); border-radius: 5px; padding: 5px; }
+      .upload-method:disabled { opacity: 0.5; }
       .notice {
         height: 58px;
         padding: 10px 12px;
@@ -378,7 +382,7 @@
 
           <div class="mode-stage">
             <section class="panel active" data-panel="upload">
-            <div class="notice">
+            <div class="notice upload-notice">
               The Teal page posts one Linear comment when it finalizes each uploaded file. This extension uploads files one at a time through the page's existing control.
             </div>
             <div class="drop-zone" role="button" tabindex="0" aria-label="Drop loose files here or choose files">
@@ -399,6 +403,12 @@
               <span>I understand that the Teal platform will post one Linear comment for each successfully finalized file.</span>
             </label>
             <div class="controls upload-actions">
+              <label class="upload-method-label">Upload method
+                <select class="upload-method" aria-label="Upload method">
+                  <option value="native">Native page</option>
+                  <option value="api">Direct API</option>
+                </select>
+              </label>
               <button class="action upload" type="button" disabled>Upload selected files</button>
               <button class="action secondary stop" data-stop-mode="upload" type="button" disabled>Stop after current file</button>
             </div>
@@ -473,6 +483,8 @@
     fileInput: shadow.querySelector(".bulk-input"),
     fileList: shadow.querySelector(".file-list"),
     uploadAck: shadow.querySelector(".upload-ack"),
+    uploadMethod: shadow.querySelector(".upload-method"),
+    uploadNotice: shadow.querySelector(".upload-notice"),
     uploadButton: shadow.querySelector(".upload"),
     currentList: shadow.querySelector(".delete-list"),
     deleteButton: shadow.querySelector(".delete"),
@@ -511,7 +523,13 @@
   let pendingConfirmation = null;
   let activeOperation = "";
   let bridgeUploadSelectionActive = false;
+  let bridgePreparedUploadMode = "native";
   let bridgeUploadSelectionTimer = 0;
+  let uploadMode = "native";
+  let apiRows = null;
+  let apiInventoryLoading = false;
+  let pageHidden = false;
+  const initialDocumentUrl = window.location.href;
   const bridgeDocumentId = createBridgeAuthorizationId();
   const persistentBridgeRequests = new Map();
   const pendingZipRequests = new Map();
@@ -619,6 +637,7 @@
 
   function openDialog() {
     refreshRows();
+    if (uploadMode === "api") void refreshApiInventory();
     ui.backdrop.classList.add("open");
     host.style.pointerEvents = "auto";
     ui.close.focus();
@@ -647,6 +666,7 @@
     ui.dropZone.classList.toggle("busy", value);
     ui.dropZone.setAttribute("aria-disabled", String(value));
     ui.uploadAck.disabled = value;
+    ui.uploadMethod.disabled = value;
     ui.tabs.forEach((tab) => { tab.disabled = value; });
     ui.selectAll.disabled = value;
     ui.selectNone.disabled = value;
@@ -705,7 +725,7 @@
   }
 
   function currentExistingNames() {
-    return new Set(readNativeRows().map((row) => row.filename));
+    return new Set((uploadMode === "api" ? (apiRows || []) : readNativeRows()).map((row) => row.filename));
   }
 
   function classifyUploads(files = selectedUploads, observedRows = null) {
@@ -734,6 +754,12 @@
   }
 
   function renderUploadFiles() {
+    if (uploadMode === "api" && apiRows === null) {
+      ui.fileList.textContent = "Checking staged files with the API...";
+      ui.fileList.classList.add("has-files");
+      updateUploadButton();
+      return;
+    }
     if (!selectedUploads.length) {
       ui.fileList.innerHTML = "";
       ui.fileList.classList.remove("has-files");
@@ -762,7 +788,38 @@
     } else {
       ui.uploadButton.textContent = "Upload selected files";
     }
-    ui.uploadButton.disabled = busy || !count || !ui.uploadAck.checked;
+    ui.uploadButton.disabled = busy || !count || !ui.uploadAck.checked || (uploadMode === "api" && apiRows === null);
+  }
+
+  function apiClient(deadline = Date.now() + UPLOAD_BATCH_TIMEOUT_MS) {
+    return globalThis.TealEvalApiUpload.createClient({
+      origin: window.location.origin,
+      issueIdentifier,
+      deadline,
+      isCurrent: () => !pageHidden && window.location.href === initialDocumentUrl,
+      onStage: (stage, filename) => {
+        if (activeOperation === "upload") setStatus(`Direct API upload: ${filename}\n${stage}`);
+      },
+      recordPartial: async (record) => {
+        const response = await chrome.runtime.sendMessage({ type: API_PARTIAL_MESSAGE, record });
+        if (!response?.ok) throw new Error("The browser could not retain the API upload state safely.");
+      }
+    });
+  }
+
+  async function refreshApiInventory() {
+    if (apiInventoryLoading) return;
+    apiInventoryLoading = true;
+    try {
+      apiRows = await apiClient().list();
+      renderUploadFiles();
+    } catch (error) {
+      apiRows = null;
+      setStatus(error instanceof Error ? error.message : "The staged-file API inventory was unavailable.", "error");
+      renderUploadFiles();
+    } finally {
+      apiInventoryLoading = false;
+    }
   }
 
   function refreshRows() {
@@ -976,6 +1033,7 @@
   }
 
   async function startUpload(options = {}) {
+    if ((options.uploadMode || (options.fromBridge ? "native" : uploadMode)) === "api") return startApiUpload(options);
     if (busy) {
       if (options.fromBridge) {
         const remaining = Array.isArray(options.files) ? options.files.map((file) => file.name) : [];
@@ -986,7 +1044,7 @@
     renderUploadFiles();
 
     const sourceFiles = Array.isArray(options.files) ? options.files : selectedUploads;
-    const { uploadable, skipped } = classifyUploads(sourceFiles);
+    const { uploadable, skipped } = classifyUploads(sourceFiles, readNativeRows());
     if (!sourceFiles.length || (!ui.uploadAck.checked && !options.fromBridge)) return;
     if (!uploadable.length) {
       setStatus(`Skipped ${skipped.length} duplicate file${skipped.length === 1 ? "" : "s"}. No new filenames need upload.`, "success");
@@ -1017,7 +1075,7 @@
     try {
       for (; nextIndex < uploadQueue.length; nextIndex += 1) {
         const file = uploadQueue[nextIndex];
-        if (currentExistingNames().has(file.name)) {
+        if (readNativeRows().some((row) => row.filename === file.name)) {
           runtimeSkipped += 1;
           runtimeSkippedEntries.push({ name: file.name, reason: "became staged before upload - skipped" });
           selectedUploads = uploadQueue.slice(nextIndex + 1);
@@ -1106,6 +1164,96 @@
         failed: [{ name: uploadQueue[nextIndex]?.name || "", error: error instanceof Error ? error.message : String(error) }],
         remaining: selectedUploads.map((file) => file.name)
       };
+    } finally {
+      setBusy(false);
+      activeOperation = "";
+      refreshRows();
+    }
+  }
+
+  async function startApiUpload(options = {}) {
+    const sourceFiles = Array.isArray(options.files) ? options.files : selectedUploads;
+    if (busy) return { operation: "upload", uploadMode: "api", succeeded: [], skipped: [],
+      failed: [{ name: "", error: "A bulk operation is already running." }], remaining: sourceFiles.map((file) => file.name) };
+    if (!sourceFiles.length || (!ui.uploadAck.checked && !options.fromBridge)) return;
+    let client;
+    try {
+      client = apiClient();
+      apiRows = await client.list();
+    } catch (error) {
+      return { operation: "upload", uploadMode: "api", succeeded: [], skipped: [],
+        failed: [{ name: "", error: error instanceof Error ? error.message : "The API inventory was unavailable." }],
+        remaining: sourceFiles.map((file) => file.name) };
+    }
+    const { uploadable, skipped } = classifyUploads(sourceFiles, apiRows);
+    renderUploadFiles();
+    if (!uploadable.length) return { operation: "upload", uploadMode: "api", succeeded: [],
+      skipped: skipped.map(({ file, reason }) => ({ name: file.name, reason })), failed: [], remaining: [] };
+    const confirmed = options.fromBridge ? true : await requestBatchConfirmation({
+      title: `Upload ${uploadable.length} file${uploadable.length === 1 ? "" : "s"} by Direct API?`,
+      copy: `Direct API will transfer each file and register it with Teal. Registration posts one Linear comment per file.${skipped.length ? ` ${skipped.length} duplicate selection${skipped.length === 1 ? " is" : "s are"} skipped.` : ""}`,
+      names: uploadable.map((file) => `${file.name} (${formatBytes(file.size)})`),
+      confirmLabel: "Confirm Direct API upload"
+    });
+    if (!confirmed) return { operation: "upload", uploadMode: "api", cancelled: true,
+      succeeded: [], skipped: [], failed: [], remaining: uploadable.map((file) => file.name) };
+
+    setBusy(true);
+    activeOperation = "upload";
+    stopAfterCurrent = false;
+    const batchDeadline = Date.now() + UPLOAD_BATCH_TIMEOUT_MS;
+    client = apiClient(batchDeadline);
+    const queue = [...uploadable];
+    const succeeded = [];
+    const runtimeSkipped = [];
+    let nextIndex = 0;
+    try {
+      for (; nextIndex < queue.length; nextIndex += 1) {
+        const file = queue[nextIndex];
+        setStatus(`Direct API upload ${nextIndex + 1} of ${queue.length}: ${file.name}\nPreparing, transferring, registering, and checking server SHA-256 and byte size`);
+        const result = await client.uploadOne(file);
+        apiRows = result.rows;
+        if (result.skipped) runtimeSkipped.push({ name: file.name, reason: result.reason });
+        else succeeded.push(file.name);
+        selectedUploads = queue.slice(nextIndex + 1);
+        renderUploadFiles();
+        if (stopAfterCurrent) { nextIndex += 1; break; }
+      }
+      const remaining = queue.slice(nextIndex).map((file) => file.name);
+      const terminalSkipped = [...skipped.map(({ file, reason }) => ({ name: file.name, reason })), ...runtimeSkipped];
+      if (remaining.length) {
+        setStatus(`Stopped after ${succeeded.length} verified API upload${succeeded.length === 1 ? "" : "s"}. ${remaining.length} file${remaining.length === 1 ? "" : "s"} remain.`, "success");
+        if (options.fromBridge) {
+          clearBridgeUploadSelection();
+          if (Array.isArray(options.files)) options.files.length = 0;
+          sourceFiles.length = 0;
+          uploadable.length = 0;
+          queue.length = 0;
+          skipped.length = 0;
+          const uploadSelectionReleased = selectedUploads.length === 0 && sourceFiles.length === 0 &&
+            uploadable.length === 0 && queue.length === 0 && skipped.length === 0 &&
+            (!ui.bridgeUploadInput.files || ui.bridgeUploadInput.files.length === 0);
+          if (!uploadSelectionReleased) throw new Error("The stopped API upload selection could not be released safely.");
+          return { operation: "upload", uploadMode: "api", stopped: true, uploadSelectionReleased: true,
+            succeeded, skipped: terminalSkipped, failed: [], remaining };
+        }
+        return { operation: "upload", uploadMode: "api", stopped: true,
+          succeeded, skipped: terminalSkipped, failed: [], remaining };
+      }
+      selectedUploads = [];
+      ui.fileInput.value = "";
+      ui.uploadAck.checked = false;
+      setStatus(`Verified ${succeeded.length} Direct API upload${succeeded.length === 1 ? "" : "s"} by full SHA-256 and byte size.`, "success");
+      return { operation: "upload", uploadMode: "api", succeeded, skipped: terminalSkipped, failed: [], remaining: [] };
+    } catch (error) {
+      selectedUploads = queue.slice(nextIndex);
+      const message = error instanceof Error ? error.message : "The Direct API upload failed.";
+      setStatus(`Direct API upload stopped after ${succeeded.length} verified file${succeeded.length === 1 ? "" : "s"}. ${selectedUploads.length} remain.\n${message}`, "error");
+      return { operation: "upload", uploadMode: "api", succeeded,
+        skipped: [...skipped.map(({ file, reason }) => ({ name: file.name, reason })), ...runtimeSkipped],
+        failed: [{ name: queue[nextIndex]?.name || "", error: message,
+          ...(error?.indeterminate ? { indeterminate: true } : {}) }],
+        remaining: selectedUploads.map((file) => file.name) };
     } finally {
       setBusy(false);
       activeOperation = "";
@@ -1701,6 +1849,13 @@
     return strictStagedObservation().inventory;
   }
 
+  async function apiObservation() {
+    const rows = await apiClient().list();
+    apiRows = rows;
+    renderUploadFiles();
+    return { rows, inventory: globalThis.TealEvalApiUpload.publicInventory(rows) };
+  }
+
   function createBridgeAuthorizationId() {
     if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
     const bytes = crypto.getRandomValues(new Uint8Array(24));
@@ -1720,10 +1875,16 @@
     return actual.length === wanted.length && actual.every((key, index) => key === wanted[index]);
   }
 
-  function bridgeCommandKeys(command) {
-    if (["capabilities", "status", "list", "prepare-upload", "cancel-upload", "stop"].includes(command)) return ["command"];
-    if (["plan-upload", "plan-download", "plan-delete"].includes(command)) return ["command", "names"];
-    if (["apply-upload", "apply-download", "apply-delete"].includes(command)) return ["authorizationId", "command", "names"];
+  function bridgeCommandKeys(command, value = {}) {
+    const hasMode = Object.prototype.hasOwnProperty.call(value, "uploadMode");
+    if (hasMode && (!(["list", "prepare-upload", "plan-upload", "apply-upload"].includes(command)) || !["native", "api"].includes(value.uploadMode))) return [];
+    const optionalMode = hasMode ? ["uploadMode"] : [];
+    if (["capabilities", "status", "cancel-upload", "stop"].includes(command)) return ["command"];
+    if (["list", "prepare-upload"].includes(command)) return ["command", ...optionalMode];
+    if (command === "plan-upload") return ["command", "names", ...optionalMode];
+    if (command === "apply-upload") return ["authorizationId", "command", "names", ...optionalMode];
+    if (["plan-download", "plan-delete"].includes(command)) return ["command", "names"];
+    if (["apply-download", "apply-delete"].includes(command)) return ["authorizationId", "command", "names"];
     return [];
   }
 
@@ -1731,6 +1892,7 @@
     if (bridgeUploadSelectionTimer) window.clearTimeout(bridgeUploadSelectionTimer);
     bridgeUploadSelectionTimer = 0;
     bridgeUploadSelectionActive = false;
+    bridgePreparedUploadMode = "native";
     ui.bridgeUploadInput.value = "";
     if (clearFiles) {
       selectedUploads = [];
@@ -1743,10 +1905,11 @@
     bridgeUploadSelectionTimer = window.setTimeout(() => clearBridgeUploadSelection(), PERSISTENT_BRIDGE_UPLOAD_TTL_MS);
   }
 
-  function prepareBridgeUploadSelection() {
+  function prepareBridgeUploadSelection(mode = "native") {
     if (busy) throw new Error("A bulk operation is already running.");
     clearBridgeUploadSelection();
     bridgeUploadSelectionActive = true;
+    bridgePreparedUploadMode = mode;
     armBridgeUploadSelectionTimer();
     return Date.now() + PERSISTENT_BRIDGE_UPLOAD_TTL_MS;
   }
@@ -1811,7 +1974,7 @@
     if (value.protocolVersion !== PERSISTENT_BRIDGE_PROTOCOL_VERSION) throw new Error("The persistent bridge protocol version did not match.");
     if (value.targetUrl !== window.location.href) throw new Error("The persistent bridge request was bound to a different page.");
     if (!isPlainBridgeObject(value.command)) throw new Error("The persistent bridge command was invalid.");
-    const keys = bridgeCommandKeys(value.command.command);
+    const keys = bridgeCommandKeys(value.command.command, value.command);
     if (!keys.length || !hasExactBridgeKeys(value.command, keys)) throw new Error("The persistent bridge command contained unsupported fields.");
     if (value.command.command === "capabilities") {
       if (value.documentId !== "") throw new Error("The initial capability request used an unexpected document identifier.");
@@ -1851,7 +2014,7 @@
       .catch((error) => emitPersistentBridgeResult(requestId, command.command, "failed", error instanceof Error ? error.message : String(error)));
   }
 
-  function planUploadFromNames(names) {
+  async function planUploadFromNames(names, mode = "native") {
     const requestedNames = parseBridgeNames(names);
     const usedNames = new Set();
     const files = [];
@@ -1869,11 +2032,12 @@
       }
       files.push(file);
     }
-    const observation = strictStagedObservation();
+    const observation = mode === "api" ? await apiObservation() : strictStagedObservation();
     const classified = classifyUploads(files, observation.rows);
     skipped.push(...classified.skipped.map(({ file, reason }) => ({ name: file.name, reason })));
     return {
       operation: "upload",
+      uploadMode: mode,
       requestedNames,
       files: classified.uploadable,
       actionableNames: classified.uploadable.map((file) => file.name),
@@ -1949,6 +2113,7 @@
       ok: true,
       issueIdentifier,
       operation: plan.operation,
+      ...(plan.operation === "upload" ? { uploadMode: plan.uploadMode || "native" } : {}),
       requestedNames: plan.requestedNames,
       actionableNames: plan.actionableNames,
       ...(plan.operation === "download" || plan.operation === "delete"
@@ -1964,6 +2129,8 @@
       throw new Error("The command issue identifier did not match this page.");
     }
     if (!Object.prototype.hasOwnProperty.call(command, "command")) throw new Error("The command was missing.");
+    const mode = command.uploadMode || "native";
+    if (!["native", "api"].includes(mode)) throw new Error("The upload method was invalid.");
     if (command.command === "capabilities") {
       return {
         ok: true,
@@ -1978,10 +2145,11 @@
       return { ok: true, issueIdentifier, busy, activeOperation };
     }
     if (command.command === "list") {
-      return { ok: true, issueIdentifier, inventory: publicInventory() };
+      return { ok: true, issueIdentifier, inventory: mode === "api" ? (await apiObservation()).inventory : publicInventory() };
     }
     if (command.command === "prepare-upload") {
-      const expiresAt = prepareBridgeUploadSelection();
+      if (mode === "api") await apiObservation();
+      const expiresAt = prepareBridgeUploadSelection(mode);
       return { ok: true, issueIdentifier, expiresAt };
     }
     if (command.command === "cancel-upload") {
@@ -1991,7 +2159,8 @@
     if (command.command === "plan-upload") {
       try {
         if (!bridgeUploadSelectionActive) throw new Error("The persistent upload selection was not prepared or expired.");
-        const plan = planUploadFromNames(command.names);
+        if (bridgePreparedUploadMode !== mode) throw new Error("The prepared upload method did not match the plan request.");
+        const plan = await planUploadFromNames(command.names, mode);
         return { ...publicPlan(plan), authorizationId: bridgePlanStore.create(plan) };
       } finally {
         clearBridgeUploadSelection();
@@ -2006,10 +2175,22 @@
       return { ...publicPlan(plan), authorizationId: bridgePlanStore.create(plan) };
     }
     if (command.command === "apply-upload") {
-      const plan = bridgePlanStore.consume({ authorizationId: command.authorizationId, operation: "upload", names: command.names });
+      const request = { authorizationId: command.authorizationId, operation: "upload", names: command.names, uploadMode: mode };
+      const plan = mode === "api"
+        ? await bridgePlanStore.consumeAsync({ ...request, readInventory: async () => (await apiObservation()).inventory })
+        : bridgePlanStore.consume(request);
       if (!plan.files.length) return { ...publicPlan(plan), succeeded: [], failed: [], remaining: [] };
-      const result = await startUpload({ files: plan.files, fromBridge: true });
-      return { ...publicPlan(plan), ...result, skipped: [...plan.skipped, ...(result?.skipped || [])] };
+      const result = mode === "api"
+        ? await startApiUpload({ files: plan.files, fromBridge: true, uploadMode: "api" })
+        : await startUpload({ files: plan.files, fromBridge: true });
+      let terminalInventory = null;
+      let observationError = "";
+      if (mode === "api") {
+        try { terminalInventory = (await apiObservation()).inventory; }
+        catch { observationError = "The final API inventory could not be read. Verify the staged files before another upload."; }
+      }
+      return { ...publicPlan(plan), ...result, skipped: [...plan.skipped, ...(result?.skipped || [])],
+        ...(mode === "api" ? { inventory: terminalInventory, ...(observationError ? { observationError } : {}) } : {}) };
     }
     if (command.command === "apply-delete") {
       const plan = bridgePlanStore.consume({ authorizationId: command.authorizationId, operation: "delete", names: command.names });
@@ -2036,11 +2217,12 @@
 
   function sendNarrowBridgeCommand(value) {
     if (!isPlainBridgeObject(value)) return Promise.reject(new Error("The command was invalid."));
-    const keys = bridgeCommandKeys(value.command);
+    const keys = bridgeCommandKeys(value.command, value);
     if (!keys.length || !hasExactBridgeKeys(value, keys)) return Promise.reject(new Error("The command contained an unsupported field."));
     const request = { type: COMMAND_REQUEST_MESSAGE, command: value.command, issueIdentifier };
     if (Object.prototype.hasOwnProperty.call(value, "names")) request.names = value.names;
     if (Object.prototype.hasOwnProperty.call(value, "authorizationId")) request.authorizationId = value.authorizationId;
+    if (Object.prototype.hasOwnProperty.call(value, "uploadMode")) request.uploadMode = value.uploadMode;
     return chrome.runtime.sendMessage(request);
   }
 
@@ -2172,8 +2354,19 @@
   });
   ui.bridgeCommandInput.addEventListener("input", () => window.setTimeout(processPersistentBridgeInput, 0));
   window.setInterval(processPersistentBridgeInput, 50);
-  window.addEventListener("pagehide", revokeAllRetainedBlobUrls, { once: true });
+  window.addEventListener("pagehide", () => { pageHidden = true; revokeAllRetainedBlobUrls(); }, { once: true });
   ui.uploadAck.addEventListener("change", updateUploadButton);
+  ui.uploadMethod.addEventListener("change", () => {
+    if (busy) return;
+    uploadMode = ui.uploadMethod.value === "api" ? "api" : "native";
+    apiRows = null;
+    ui.uploadNotice.textContent = uploadMode === "api"
+      ? "Direct API uploads one file at a time in this signed-in browser tab. Each registration posts one Linear comment. The extension checks the full server SHA-256 and byte size."
+      : "The Teal page posts one Linear comment when it finalizes each uploaded file. This extension uploads files one at a time through the page's existing control.";
+    clearStatus();
+    renderUploadFiles();
+    if (uploadMode === "api") void refreshApiInventory();
+  });
   ui.uploadButton.addEventListener("click", startUpload);
   ui.downloadButton.addEventListener("click", startDownload);
   ui.deleteButton.addEventListener("click", startDelete);

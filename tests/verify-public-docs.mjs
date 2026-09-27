@@ -73,7 +73,7 @@ for (const relativePath of expectedImages) {
 
 for (const relativePath of releaseDocs) {
   const content = await readFile(resolve(root, relativePath), "utf8");
-  if (!content.includes("0.9.8")) failures.push(`${relativePath}: does not name release 0.9.8.`);
+  if (!content.includes("0.10.0")) failures.push(`${relativePath}: does not name release 0.10.0.`);
   if (!content.includes("0.1.3")) failures.push(`${relativePath}: does not name required bridge 0.1.3.`);
 }
 for (const relativePath of agentSafetyDocs) {
@@ -84,7 +84,8 @@ for (const relativePath of agentSafetyDocs) {
   }
 }
 const changelog = await readFile(resolve(root, "CHANGELOG.md"), "utf8");
-if (!/^## 0\.9\.8 - 2026-08-17$/mu.test(changelog)) failures.push("CHANGELOG.md: missing the dated 0.9.8 entry.");
+if (!/^## 0\.10\.0 - 2026-09-26$/mu.test(changelog)) failures.push("CHANGELOG.md: missing the dated 0.10.0 entry.");
+if (!/^## 0\.9\.8 - 2026-08-17$/mu.test(changelog)) failures.push("CHANGELOG.md: missing the 0.9.8 history entry.");
 if (!/^## 0\.9\.7 - 2026-08-17$/mu.test(changelog)) failures.push("CHANGELOG.md: missing the 0.9.7 history entry.");
 if (!/^## 0\.9\.6$/mu.test(changelog)) failures.push("CHANGELOG.md: missing the 0.9.6 history entry.");
 

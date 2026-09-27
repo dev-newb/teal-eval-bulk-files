@@ -61,7 +61,7 @@ function parseArguments(argv) {
   const positional = [];
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
-    if (value === "--cdp" || value === "--browser" || value === "--persistent-bridge" || value === "--bridge-wait-seconds" || value === "--user-data-dir" || value === "--issue" || value === "--state" || value === "--ttl-seconds" || value === "--target-id") {
+    if (value === "--cdp" || value === "--browser" || value === "--persistent-bridge" || value === "--bridge-wait-seconds" || value === "--user-data-dir" || value === "--issue" || value === "--state" || value === "--ttl-seconds" || value === "--target-id" || value === "--upload-mode") {
       const next = argv[index + 1];
       if (!next || next.startsWith("--")) throw new Error(`Missing value for ${value}.`);
       const optionName = value.slice(2);
@@ -83,6 +83,10 @@ function parseArguments(argv) {
   if (["status", "list", "stop"].includes(command) && positional.length) throw new Error(`${command} does not accept operands.`);
   if (["plan-upload", "verify", "plan-download", "plan-delete"].includes(command) && positional.length === 0) throw new Error(`${command} requires at least one file ${["plan-upload", "verify"].includes(command) ? "path" : "name"}.`);
   if (["apply-upload", "apply-download", "apply-delete"].includes(command) && positional.length !== 1) throw new Error(`${command} requires exactly one plan token.`);
+  if (options["upload-mode"] !== undefined) {
+    if (!["list", "plan-upload", "apply-upload", "verify"].includes(command)) throw new Error("--upload-mode can be used only with list, plan-upload, apply-upload, or verify.");
+    if (!["native", "api"].includes(options["upload-mode"])) throw new Error("--upload-mode must be native or api.");
+  }
   if (!options.issue) throw new Error("--issue is required.");
   const connectionCount = [options.cdp, options.browser, options["persistent-bridge"]].filter(Boolean).length;
   if (connectionCount !== 1) throw new Error("Use exactly one connection option: --persistent-bridge, --cdp, or --browser.");
@@ -112,6 +116,7 @@ function parseArguments(argv) {
     userDataDir: options["user-data-dir"] || "",
     targetId,
     issueIdentifier,
+    uploadMode: options["upload-mode"] || "",
     ttlMs: ttlSeconds * 1000,
     statePath: options.state || join(tmpdir(), "teal-eval-bulk-cli-v09-tokens.json")
   };
@@ -848,10 +853,22 @@ function createToken(state, record) {
 function validatePlanToken(record, { issueIdentifier, operation, targetId, now = Date.now() }) {
   if (!record || typeof record !== "object") throw new Error("The plan token was not found.");
   if (operation === "upload" && record.tokenSchemaVersion !== 2) throw new Error("This upload plan token predates upload token schema v2 and cannot be applied safely.");
+  if (operation === "upload" && !["native", "api"].includes(record.uploadMode ?? "native")) throw new Error("The upload plan token has an invalid upload mode.");
   if (record.consumed) throw new Error("The plan token was already used.");
   if (record.expiresAt <= now) throw new Error("The plan token expired.");
   if (record.issueIdentifier !== issueIdentifier || record.operation !== operation) throw new Error("The plan token is bound to a different issue or operation.");
   if (String(record.targetId) !== String(targetId)) throw new Error("The plan token is bound to a different target tab.");
+}
+
+function uploadModeForRecord(record) {
+  const mode = record?.uploadMode ?? "native";
+  if (!["native", "api"].includes(mode)) throw new Error("The upload plan token has an invalid upload mode.");
+  return mode;
+}
+
+function bridgeUploadMode(uploadMode) {
+  if (!["native", "api"].includes(uploadMode)) throw new Error("The upload mode was invalid.");
+  return uploadMode === "api" ? { uploadMode } : {};
 }
 
 function validatePlanConnection(record, client) {
@@ -870,7 +887,8 @@ function createApplyBridgeCommand(command, record) {
   return {
     command,
     names: [...names],
-    authorizationId: record.bridgeAuthorizationId
+    authorizationId: record.bridgeAuthorizationId,
+    ...(command === "apply-upload" ? bridgeUploadMode(uploadModeForRecord(record)) : {})
   };
 }
 
@@ -893,13 +911,23 @@ function normalizeIndeterminateApplyResult(cli, operation, record, token, result
       ? result.error
       : "The apply dispatch is indeterminate and may still be running.",
     token,
-    tokenConsumed: true
+    tokenConsumed: true,
+    ...(operation === "upload" ? { uploadMode: uploadModeForRecord(record) } : {})
   };
-  const observedInventory = Array.isArray(result?.inventory) ? result.inventory : record.inventory;
+  const observedInventory = Array.isArray(result?.inventory)
+    ? result.inventory
+    : operation === "upload" && uploadModeForRecord(record) === "api" ? null : record.inventory;
   if (operation === "upload") {
+    normalized.inventory = observedInventory;
     const actionableFiles = Array.isArray(record.actionableFiles) ? record.actionableFiles : [];
     normalized.uploadedBeforeFailure = actionableFiles
-      .filter((file) => observedInventory.some((row) => row?.filename === file.filename && row?.sha256 === file.sha256))
+      .filter((file) => {
+        if (uploadModeForRecord(record) === "api") {
+          const rows = observedInventory?.filter((row) => row?.filename === file.filename) || [];
+          return rows.length === 1 && rows[0].sha256 === file.sha256;
+        }
+        return observedInventory?.some((row) => row?.filename === file.filename && row?.sha256 === file.sha256);
+      })
       .map((file) => file.filename);
   } else if ((operation === "download" || operation === "delete") && Array.isArray(record.actionableFiles)) {
     normalized.actionableFiles = record.actionableFiles.map((file) => ({ filename: file.filename, sha256: file.sha256, sizeText: file.sizeText }));
@@ -935,10 +963,11 @@ function classifyLocalUploadFiles(files, inventory) {
   return { actionableFiles, skipped };
 }
 
-async function getCurrentInventory(client, contextId) {
+async function getCurrentInventory(client, contextId, uploadMode = "native") {
+  const command = { command: "list", ...bridgeUploadMode(uploadMode) };
   const listed = client.mode === "persistent"
-    ? (await client.callBridge({ command: "list" }, { timeoutMs: 30_000 })).result
-    : await callBridge(client, contextId, { command: "list" });
+    ? (await client.callBridge(command, { timeoutMs: 30_000 })).result
+    : await callBridge(client, contextId, command);
   if (!listed?.ok) throw new Error(listed?.error || "The controller did not return the current inventory.");
   return canonicalInventory(listed.inventory);
 }
@@ -951,8 +980,9 @@ async function createPlan(cli, client, contextId) {
   let bridgeAuthorizationId = "";
   let actionableFiles = [];
   if (operation === "upload") {
+    const uploadMode = cli.uploadMode || "native";
     const localFiles = await inspectUploadFiles(cli.operands);
-    inventory = await getCurrentInventory(client, contextId);
+    inventory = await getCurrentInventory(client, contextId, uploadMode);
     const classified = classifyLocalUploadFiles(localFiles, inventory);
     actionableFiles = classified.actionableFiles;
     names = localFiles.map((file) => file.filename);
@@ -960,6 +990,7 @@ async function createPlan(cli, client, contextId) {
       ok: true,
       issueIdentifier: cli.issueIdentifier,
       operation,
+      uploadMode,
       requestedNames: names,
       actionableNames: actionableFiles.map((file) => file.filename),
       actionableFiles: actionableFiles.map(({ filename, size, sha256 }) => ({ filename, sha256, sizeText: sizeTextForBytes(size) })),
@@ -996,7 +1027,7 @@ async function createPlan(cli, client, contextId) {
       bridgeDocumentId: client.documentId || "",
       requestedNames: [...names],
       actionableNames: Array.isArray(publicResult.actionableNames) ? [...publicResult.actionableNames] : [],
-      ...(operation === "upload" ? { tokenSchemaVersion: 2, actionableFiles } : {}),
+      ...(operation === "upload" ? { tokenSchemaVersion: 2, uploadMode: cli.uploadMode || "native", actionableFiles } : {}),
       ...(operation === "download" || operation === "delete" ? { actionableFiles } : {}),
       skipped: Array.isArray(publicResult.skipped) ? publicResult.skipped : [],
       ...(bridgeAuthorizationId ? { bridgeAuthorizationId } : {}),
@@ -1011,16 +1042,16 @@ async function createPlan(cli, client, contextId) {
   return { ...publicResult, inventory, token: saved.token, expiresAt: saved.expiresAt };
 }
 
-async function observedInventoryAfterUpload(client, contextId, fallback, { propagateProvedPreDispatchLeaseBusy = false } = {}) {
+async function observedInventoryAfterUpload(client, contextId, fallback, { propagateProvedPreDispatchLeaseBusy = false, uploadMode = "native" } = {}) {
   try {
-    return await getCurrentInventory(client, contextId);
+    return await getCurrentInventory(client, contextId, uploadMode);
   } catch (error) {
     if (propagateProvedPreDispatchLeaseBusy && isProvedPreDispatchLeaseBusy(error)) throw error;
-    return fallback;
+    return uploadMode === "api" ? null : fallback;
   }
 }
 
-async function transferUploadFiles(client, contextId, actionableFiles, snapshot, now = () => Date.now()) {
+async function transferUploadFiles(client, contextId, actionableFiles, snapshot, uploadMode = "native", now = () => Date.now()) {
   const paths = actionableFiles.map((file) => file.absolutePath);
   const renewTransferLease = async () => {
     const renewed = await renewPrivateSnapshot(snapshot, {
@@ -1033,9 +1064,9 @@ async function transferUploadFiles(client, contextId, actionableFiles, snapshot,
   const hooks = { beforeFileSelection: renewTransferLease, afterFileSelection: renewTransferLease };
   let selectedNames;
   if (client.mode === "persistent") {
-    selectedNames = await client.uploadFiles(paths, hooks);
+    selectedNames = await client.uploadFiles(paths, { ...hooks, uploadMode });
   } else {
-    const prepared = await callBridge(client, contextId, { command: "prepare-upload" });
+    const prepared = await callBridge(client, contextId, { command: "prepare-upload", ...bridgeUploadMode(uploadMode) });
     if (!prepared?.ok) throw new Error(prepared?.error || "The extension did not prepare the CLI upload selection.");
     selectedNames = await setCliBridgeUploadFiles(client, paths, hooks);
   }
@@ -1054,17 +1085,20 @@ function isCompleteUploadResult(result) {
 }
 
 async function applyUploadPlan(cli, client, contextId, token, record, preTransferInventory, uploadSnapshot) {
+  const uploadMode = uploadModeForRecord(record);
   if (!record.actionableFiles.length) {
     return {
       ok: true,
       issueIdentifier: cli.issueIdentifier,
       operation: "upload",
+      uploadMode,
       requestedNames: [...record.requestedNames],
       actionableNames: [],
       succeeded: [],
       skipped: Array.isArray(record.skipped) ? record.skipped : [],
       failed: [],
       remaining: [],
+      ...(uploadMode === "api" ? { inventory: preTransferInventory } : {}),
       token,
       tokenConsumed: true
     };
@@ -1083,6 +1117,7 @@ async function applyUploadPlan(cli, client, contextId, token, record, preTransfe
         contextId,
         uploadSnapshot.actionableFiles,
         uploadSnapshot,
+        uploadMode,
         cli?.snapshotNowForTest || client?.snapshotNowForTest || (() => Date.now())
       );
     } catch (error) {
@@ -1091,7 +1126,7 @@ async function applyUploadPlan(cli, client, contextId, token, record, preTransfe
         throw error;
       }
       retainSnapshot = true;
-      observed = await observedInventoryAfterUpload(client, contextId, preTransferInventory);
+      observed = await observedInventoryAfterUpload(client, contextId, preTransferInventory, { uploadMode });
       return finish(normalizeIndeterminateApplyResult(cli, "upload", record, token, {
         error: `The upload transfer may have changed the extension selection. ${error instanceof Error ? error.message : String(error)}`,
         inventory: observed
@@ -1099,7 +1134,8 @@ async function applyUploadPlan(cli, client, contextId, token, record, preTransfe
     }
     try {
       observed = await observedInventoryAfterUpload(client, contextId, preTransferInventory, {
-        propagateProvedPreDispatchLeaseBusy: true
+        propagateProvedPreDispatchLeaseBusy: true,
+        uploadMode
       });
     } catch (error) {
       if (isProvedPreDispatchLeaseBusy(error)) retainSnapshot = true;
@@ -1114,10 +1150,17 @@ async function applyUploadPlan(cli, client, contextId, token, record, preTransfe
     }
     try {
       const planResult = client.mode === "persistent"
-        ? (await client.callBridge({ command: "plan-upload", names: record.actionableNames }, { timeoutMs: 30_000, indeterminateOnDispatch: true })).result
-        : await callBridge(client, contextId, { command: "plan-upload", names: record.actionableNames });
+        ? (await client.callBridge({ command: "plan-upload", names: record.actionableNames, ...bridgeUploadMode(uploadMode) }, { timeoutMs: 30_000, indeterminateOnDispatch: true })).result
+        : await callBridge(client, contextId, { command: "plan-upload", names: record.actionableNames, ...bridgeUploadMode(uploadMode) });
       if (!planResult?.ok || !BRIDGE_AUTHORIZATION_PATTERN.test(planResult.authorizationId || "")) {
         throw new Error(planResult?.error || "The extension did not create an upload authorization.");
+      }
+      if (uploadMode === "api" && (planResult.uploadMode !== "api"
+        || JSON.stringify(planResult.requestedNames) !== JSON.stringify(record.actionableNames)
+        || JSON.stringify(planResult.actionableNames) !== JSON.stringify(record.actionableNames)
+        || !Array.isArray(planResult.inventory)
+        || JSON.stringify(canonicalInventory(planResult.inventory)) !== JSON.stringify(observed))) {
+        throw new Error("The API upload authorization did not match the selected method, filenames, or fresh API inventory.");
       }
       const applyRecord = { ...record, bridgeAuthorizationId: planResult.authorizationId };
       const result = client.mode === "persistent"
@@ -1125,9 +1168,37 @@ async function applyUploadPlan(cli, client, contextId, token, record, preTransfe
         : await callBridge(client, contextId, createApplyBridgeCommand("apply-upload", applyRecord), APPLY_UPLOAD_TIMEOUT_MS);
       if (!result || typeof result !== "object") throw new Error("The extension returned no upload apply result.");
       const completeResult = isCompleteUploadResult(result);
+      if (uploadMode === "api") {
+        observed = await observedInventoryAfterUpload(client, contextId, null, { uploadMode });
+        if (!observed) {
+          retainSnapshot = true;
+          const normalized = normalizeIndeterminateApplyResult(cli, "upload", record, token, {
+            error: "The API upload returned, but a fresh terminal API inventory could not be read. No retry was attempted.",
+            inventory: null
+          });
+          return finish({ ...normalized, ...(completeResult ? result : {}), ok: false, indeterminate: true,
+            error: normalized.error, inventory: null, uploadMode, token, tokenConsumed: true,
+            uploadedBeforeFailure: normalized.uploadedBeforeFailure });
+        }
+        const absentSuccess = completeResult && result.succeeded.some((name) => {
+          const file = record.actionableFiles.find((entry) => entry.filename === name);
+          const rows = observed.filter((row) => row.filename === name);
+          return !file || rows.length !== 1 || rows[0].sha256 !== file.sha256;
+        });
+        if (absentSuccess) {
+          retainSnapshot = true;
+          const normalized = normalizeIndeterminateApplyResult(cli, "upload", record, token, {
+            error: "The API upload result did not match the fresh terminal API inventory. No retry was attempted.",
+            inventory: observed
+          });
+          return finish({ ...normalized, ...result, ok: false, indeterminate: true,
+            error: normalized.error, inventory: observed, uploadMode, token, tokenConsumed: true,
+            uploadedBeforeFailure: normalized.uploadedBeforeFailure });
+        }
+      }
       const stoppedCandidate = completeResult && result.indeterminate !== true && result.failed.length === 0 && result.remaining.length > 0;
       const stopped = stoppedCandidate && result.stopped === true && result.uploadSelectionReleased === true;
-      if (stopped) return finish({ ...result, ok: false, stopped: true, token, tokenConsumed: true });
+      if (stopped) return finish({ ...result, ok: false, stopped: true, ...(uploadMode === "api" ? { inventory: observed } : {}), uploadMode, token, tokenConsumed: true });
       const reportedFailure = !completeResult
         || result.indeterminate === true
         || result.ok === false
@@ -1136,7 +1207,7 @@ async function applyUploadPlan(cli, client, contextId, token, record, preTransfe
         || stoppedCandidate;
       if (reportedFailure) {
         retainSnapshot = true;
-        observed = await observedInventoryAfterUpload(client, contextId, observed);
+        observed = await observedInventoryAfterUpload(client, contextId, observed, { uploadMode });
         const normalized = normalizeIndeterminateApplyResult(cli, "upload", record, token, {
           ...result,
           error: !completeResult
@@ -1152,16 +1223,18 @@ async function applyUploadPlan(cli, client, contextId, token, record, preTransfe
           ok: false,
           indeterminate: true,
           error: normalized.error,
+          inventory: observed,
+          uploadMode,
           token,
           tokenConsumed: true,
           uploadedBeforeFailure: normalized.uploadedBeforeFailure
         });
       }
-      return finish({ ...result, token, tokenConsumed: true });
+      return finish({ ...result, ...(uploadMode === "api" ? { inventory: observed } : {}), uploadMode, token, tokenConsumed: true });
     } catch (error) {
       retainSnapshot = true;
       if (isProvedPreDispatchLeaseBusy(error)) throw error;
-      observed = await observedInventoryAfterUpload(client, contextId, observed);
+      observed = await observedInventoryAfterUpload(client, contextId, observed, { uploadMode });
       return finish(normalizeIndeterminateApplyResult(cli, "upload", record, token, {
         error: `The upload authorization or apply result is uncertain after file transfer. ${error instanceof Error ? error.message : String(error)} No retry was attempted.`,
         inventory: observed
@@ -1202,8 +1275,12 @@ async function applyPlan(cli, client, contextId) {
   const preliminaryState = await loadState(cli.statePath);
   const preliminaryRecord = preliminaryState.tokens[token];
   validatePlanToken(preliminaryRecord, { issueIdentifier: cli.issueIdentifier, operation, targetId: client.targetId, now });
+  const uploadMode = operation === "upload" ? uploadModeForRecord(preliminaryRecord) : "native";
+  if (operation === "upload" && cli.uploadMode && cli.uploadMode !== uploadMode) {
+    throw new Error("The requested upload mode does not match the plan token. No mutation started.");
+  }
   validatePlanConnection(preliminaryRecord, client);
-  const inventory = await getCurrentInventory(client, contextId);
+  const inventory = await getCurrentInventory(client, contextId, uploadMode);
   if (JSON.stringify(inventory) !== JSON.stringify(preliminaryRecord.inventory)) throw new Error("The staged-file inventory changed after planning. No mutation was started.");
   let uploadSnapshot = null;
   if (operation === "upload") uploadSnapshot = await createVerifiedUploadSnapshot(preliminaryRecord.actionableFiles);
@@ -1214,6 +1291,9 @@ async function applyPlan(cli, client, contextId) {
       const state = await loadState(cli.statePath);
       const current = state.tokens[token];
       validatePlanToken(current, { issueIdentifier: cli.issueIdentifier, operation, targetId: client.targetId, now: Date.now() });
+      if (operation === "upload" && cli.uploadMode && cli.uploadMode !== uploadModeForRecord(current)) {
+        throw new Error("The requested upload mode does not match the plan token. No mutation started.");
+      }
       validatePlanConnection(current, client);
       if (JSON.stringify(current) !== JSON.stringify(preliminaryRecord)) {
         throw new Error("The local plan token changed before it could be claimed. No mutation started.");
@@ -1294,7 +1374,8 @@ function classifyCommandResult(command, issueIdentifier, result) {
 async function verifyFiles(cli, client, contextId) {
   const localFiles = await inspectUploadFiles(cli.operands);
   if (localFiles.some((file) => file.repeated)) throw new Error("verify requires unique local basenames for an exact-set comparison.");
-  const inventory = await getCurrentInventory(client, contextId);
+  const uploadMode = cli.uploadMode || "native";
+  const inventory = await getCurrentInventory(client, contextId, uploadMode);
   const localNames = new Set(localFiles.map((file) => file.filename));
   const matched = [];
   const mismatched = [];
@@ -1312,6 +1393,7 @@ async function verifyFiles(cli, client, contextId) {
   return {
     ok: mismatched.length === 0 && missingRemotely.length === 0 && missingLocally.length === 0,
     operation: "verify",
+    uploadMode,
     matched,
     mismatched,
     missingRemotely,
@@ -1353,6 +1435,10 @@ async function run() {
     if (["plan-upload", "plan-download", "plan-delete"].includes(cli.command)) result = await createPlan(cli, client, contextId);
     else if (["apply-upload", "apply-download", "apply-delete"].includes(cli.command)) result = await applyPlan(cli, client, contextId);
     else if (cli.command === "verify") result = await verifyFiles(cli, client, contextId);
+    else if (cli.command === "list") {
+      const uploadMode = cli.uploadMode || "native";
+      result = { ok: true, inventory: await getCurrentInventory(client, contextId, uploadMode), uploadMode };
+    }
     else result = client.mode === "persistent"
       ? (await client.callBridge({ command: cli.command }, { timeoutMs: 30_000 })).result
       : await callBridge(client, contextId, { command: cli.command });

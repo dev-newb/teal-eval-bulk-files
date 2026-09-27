@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { basename } from "node:path";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 
 const proxyArguments = process.argv.slice(2);
 if (proxyArguments.length !== 3
@@ -81,6 +82,7 @@ function initialState() {
     markers: [],
     uploadedFiles: [],
     inventory: defaultInventory(),
+    apiInventory: [],
     authorizationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
     downloadId: 42,
     indeterminateApplyDownload: false
@@ -144,13 +146,24 @@ function exactKeys(value, expected) {
 
 function validateCommandShape(command) {
   const commandName = command?.command;
-  if (["capabilities", "status", "list", "prepare-upload", "cancel-upload", "stop"].includes(commandName)) {
+  const apiMode = command?.uploadMode === "api";
+  if (command?.uploadMode !== undefined && !apiMode) return false;
+  if (["list", "prepare-upload"].includes(commandName)) {
+    return exactKeys(command, ["command", ...(apiMode ? ["uploadMode"] : [])]);
+  }
+  if (["capabilities", "status", "cancel-upload", "stop"].includes(commandName)) {
     return exactKeys(command, ["command"]);
   }
-  if (["plan-upload", "plan-download", "plan-delete"].includes(commandName)) {
+  if (commandName === "plan-upload") {
+    return exactKeys(command, ["command", "names", ...(apiMode ? ["uploadMode"] : [])]);
+  }
+  if (["plan-download", "plan-delete"].includes(commandName)) {
     return exactKeys(command, ["command", "names"]);
   }
-  if (["apply-upload", "apply-download", "apply-delete"].includes(commandName)) {
+  if (commandName === "apply-upload") {
+    return exactKeys(command, ["command", "names", "authorizationId", ...(apiMode ? ["uploadMode"] : [])]);
+  }
+  if (["apply-download", "apply-delete"].includes(commandName)) {
     return exactKeys(command, ["command", "names", "authorizationId"]);
   }
   return false;
@@ -180,6 +193,7 @@ function canonicalInventory(inventory) {
 
 function bridgeResult(state, envelope) {
   const command = envelope.command;
+  const uploadInventory = command.uploadMode === "api" ? state.apiInventory : state.inventory;
   state.commandEnvelopes.push(envelope);
   let result;
   if (!validateCommandShape(command)) {
@@ -196,7 +210,7 @@ function bridgeResult(state, envelope) {
   } else if (command.command === "status") {
     result = { ok: true, issueIdentifier: "TAB-TEST", busy: false, activeOperation: "" };
   } else if (command.command === "list") {
-    result = { ok: true, issueIdentifier: "TAB-TEST", inventory: state.inventory };
+    result = { ok: true, issueIdentifier: "TAB-TEST", inventory: uploadInventory };
   } else if (command.command === "prepare-upload") {
     state.uploadedFiles = [];
     result = { ok: true, issueIdentifier: "TAB-TEST", expiresAt: Date.now() + 300_000 };
@@ -210,10 +224,11 @@ function bridgeResult(state, envelope) {
       ok: true,
       issueIdentifier: "TAB-TEST",
       operation: "upload",
+      ...(command.uploadMode === "api" ? { uploadMode: "api" } : {}),
       requestedNames: command.names,
       actionableNames,
       skipped: command.names.filter((name) => !uploadedNames.includes(name)).map((name) => ({ name, reason: "not selected" })),
-      inventory: state.inventory,
+      inventory: uploadInventory,
       authorizationId: state.authorizationId
     };
   } else if (command.command === "plan-download" || command.command === "plan-delete") {
@@ -231,8 +246,12 @@ function bridgeResult(state, envelope) {
     };
   } else if (command.command === "apply-upload") {
     for (const name of command.names) {
-      if (!state.inventory.some((row) => row.filename === name)) {
-        state.inventory.push({ filename: name, sha256: "a".repeat(64), sizeText: "1 B" });
+      if (!uploadInventory.some((row) => row.filename === name)) {
+        const selectedPath = state.uploadedFiles.find((filePath) => basename(filePath) === name);
+        const sha256 = command.uploadMode === "api" && selectedPath
+          ? createHash("sha256").update(readFileSync(selectedPath)).digest("hex") : "a".repeat(64);
+        const sizeText = command.uploadMode === "api" && selectedPath ? `${statSync(selectedPath).size} B` : "1 B";
+        uploadInventory.push({ filename: name, sha256, sizeText });
       }
     }
     result = { ok: true, issueIdentifier: "TAB-TEST", operation: "upload", succeeded: command.names, skipped: [], failed: [], remaining: [] };
