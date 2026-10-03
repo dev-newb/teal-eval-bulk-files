@@ -6,7 +6,7 @@
 - CLI: `extension/teal-eval-bulk-cli.mjs`
 - Persistent-bridge client module: `extension/persistent-mcp-client.mjs`
 - Extension README: `README.md`
-- Required extension version: `0.10.0`
+- Required extension version: `0.10.1`
 - Required persistent gateway: `chrome-devtools-persistent-gateway` version `0.1.3`
 - Node.js requirement: version 24
 

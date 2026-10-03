@@ -35,7 +35,7 @@ Keep `actionableFiles` as the approved manifest. After apply, run `list`. For ea
 The agent wrapper defaults to API mode for `plan-upload`, `list`, and `verify`. Apply inherits the chosen method from its token. Use `-UploadMode native` for a deliberate fallback. The raw Node CLI retains its native default, so pass `--upload-mode api` when using it directly. See [API upload mode](api-upload.md) for a complete example and failure handling.
 
 - Node.js 24
-- Teal Eval Bulk Files `0.10.0` loaded unpacked in Chrome or Microsoft Edge
+- Teal Eval Bulk Files `0.10.1` loaded unpacked in Chrome or Microsoft Edge
 - Chrome DevTools MCP persistent bridge `0.1.3` for persistent mode
 - An open Teal Alpha issue tab
 - The selected browser's protected local debugging bridge enabled

@@ -9,7 +9,7 @@ The extension is installed as an unpacked Manifest V3 extension. Use the same `e
 3. Select **Load unpacked**.
 4. Select the repository's `extension` directory.
 5. Open or reload a Teal Alpha issue page.
-6. Confirm that **Bulk files** appears beside **Add file** in the **Staged files** card.
+6. Confirm that **Bulk files** appears beside **Add files** (or **Add file** on older pages) in the **Staged files** card.
 
 ## Google Chrome
 
@@ -18,7 +18,7 @@ The extension is installed as an unpacked Manifest V3 extension. Use the same `e
 3. Select **Load unpacked**.
 4. Select the repository's `extension` directory.
 5. Open or reload a Teal Alpha issue page.
-6. Confirm that **Bulk files** appears beside **Add file**.
+6. Confirm that **Bulk files** appears beside **Add files** (or **Add file** on older pages).
 
 ## Reload after an update
 
@@ -32,7 +32,7 @@ The repository files can change while the unpacked extension is installed.
 If the button is missing, check these items:
 
 - The address matches `https://platform-teal-alpha.vercel.app/issue/*`.
-- The page shows a **Staged files** card and an **Add file** button.
+- The page shows a **Staged files** card and an **Add files** (or **Add file** on older pages) button.
 - The extension has no error on the browser's extension page.
 - The selected unpacked directory contains `manifest.json`, not another parent directory.
 

@@ -1,6 +1,6 @@
 # Teal Eval Bulk Files: user and agent manual
 
-Version 0.10.0 · Chrome and Microsoft Edge · Windows CLI examples
+Version 0.10.1 · Chrome and Microsoft Edge · Windows CLI examples
 
 Teal Eval Bulk Files adds bulk upload, ZIP download, and checked deletion to the **Staged files** area of a Tacit eval page. You can use its visible controls yourself, or give an agent access through the companion CLI shipped in the same package.
 
@@ -21,7 +21,7 @@ This manual uses a complete fictional eval page and invented files. Screenshots 
 
 ## Quick start
 
-For normal use, load the extension in your browser, sign in to Tacit, and open the required task. Select **Bulk files** beside **Add file**.
+For normal use, load the extension in your browser, sign in to Tacit, and open the required task. Select **Bulk files** beside **Add files** (or **Add file** on older pages).
 
 | Goal | Select | Result |
 | --- | --- | --- |
@@ -59,7 +59,7 @@ Replace the files in the same unpacked extension folder. In the browser's extens
 
 Update the companion CLI and skill together with the extension. Their exact version checks prevent an older CLI from sending commands that a newer extension interprets differently.
 
-For command-line use, the supported combination in this manual is extension/CLI **0.10.0**, Node.js **24**, and persistent gateway **0.1.3**. The browser bridge has its [own installation guide](https://github.com/esmaesx/chrome-devtools-mcp-persistent-bridge). It is an optional companion package, separate from the extension repository.
+For command-line use, the supported combination in this manual is extension/CLI **0.10.1**, Node.js **24**, and persistent gateway **0.1.3**. The browser bridge has its [own installation guide](https://github.com/esmaesx/chrome-devtools-mcp-persistent-bridge). It is an optional companion package, separate from the extension repository.
 
 ## The normal interface
 

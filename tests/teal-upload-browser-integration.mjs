@@ -15,6 +15,8 @@ const cliPath = resolve(extensionRoot, "teal-eval-bulk-cli.mjs");
 const serverPath = resolve(root, "tests", "mock", "server.py");
 const fixtureOrigin = "http://127.0.0.1:8769";
 const fixtureUrl = `${fixtureOrigin}/issue/TAB-TEST`;
+const idleAddLabel = process.env.TEAL_TEST_ADD_LABEL || "Add files";
+assert.ok(["Add file", "Add files"].includes(idleAddLabel), "Use a supported idle upload label.");
 const tempBase = resolve(tmpdir());
 
 function assertTemporaryPath(path) {
@@ -111,8 +113,8 @@ async function prepareTestExtension(buildRoot) {
   const original = await readFile(contentPath, "utf8");
   let instrumented = replaceRequired(
     original,
-    "  function prepareBridgeUploadSelection() {",
-    `  // TEST-ONLY: expose direct upload command order on the local TAB-TEST DOM.\n  function recordTestUploadStep(step) {\n    const steps = JSON.parse(document.body.dataset.tealTestUploadSteps || "[]");\n    steps.push(step);\n    document.body.dataset.tealTestUploadSteps = JSON.stringify(steps);\n  }\n\n  function prepareBridgeUploadSelection() {\n    recordTestUploadStep("prepare-upload");`,
+    '  function prepareBridgeUploadSelection(mode = "native") {',
+    `  // TEST-ONLY: expose direct upload command order on the local TAB-TEST DOM.\n  function recordTestUploadStep(step) {\n    const steps = JSON.parse(document.body.dataset.tealTestUploadSteps || "[]");\n    steps.push(step);\n    document.body.dataset.tealTestUploadSteps = JSON.stringify(steps);\n  }\n\n  function prepareBridgeUploadSelection(mode = "native") {\n    recordTestUploadStep("prepare-upload");`,
     "prepare-upload"
   );
   instrumented = replaceRequired(
@@ -135,8 +137,8 @@ async function prepareTestExtension(buildRoot) {
   );
   instrumented = replaceRequired(
     instrumented,
-    "      const result = await startUpload({ files: plan.files, fromBridge: true });",
-    `      // TEST-ONLY: create a loading-to-ready duplicate after authorization consumption.\n      if (document.body.dataset.tealTestReadyDuplicate === "1" && plan.files.length) {\n        const panel = findNativePanel();\n        const table = panel?.container.querySelector("table");\n        if (!panel || !table) throw new Error("The local duplicate-ready fixture was not available.");\n        const loading = document.createElement("div");\n        loading.textContent = "Loading…";\n        table.replaceWith(loading);\n        window.setTimeout(() => {\n          const name = plan.files[0].name;\n          const tr = document.createElement("tr");\n          tr.innerHTML = \`<td>\${name}</td><td>1 B</td><td><span title="\${"f".repeat(64)}">\${"f".repeat(8)}</span></td><td><button type="button">download</button><button class="danger" type="button">remove</button></td>\`;\n          table.querySelector("tbody").appendChild(tr);\n          loading.replaceWith(table);\n        }, 350);\n      }\n      const result = await startUpload({ files: plan.files, fromBridge: true });`,
+    '      const result = mode === "api"',
+    `      // TEST-ONLY: create a loading-to-ready duplicate after authorization consumption.\n      if (document.body.dataset.tealTestReadyDuplicate === "1" && plan.files.length) {\n        const panel = findNativePanel();\n        const table = panel?.container.querySelector("table");\n        if (!panel || !table) throw new Error("The local duplicate-ready fixture was not available.");\n        const loading = document.createElement("div");\n        loading.textContent = "Loading…";\n        table.replaceWith(loading);\n        window.setTimeout(() => {\n          const name = plan.files[0].name;\n          const tr = document.createElement("tr");\n          tr.innerHTML = \`<td>\${name}</td><td>1 B</td><td><span title="\${"f".repeat(64)}">\${"f".repeat(8)}</span></td><td><button type="button">download</button><button class="danger" type="button">remove</button></td>\`;\n          table.querySelector("tbody").appendChild(tr);\n          loading.replaceWith(table);\n        }, 350);\n      }\n      const result = mode === "api"`,
     "ready duplicate transition"
   );
   instrumented = replaceRequired(
@@ -169,6 +171,7 @@ async function runProcess(command, args, { timeoutMs = 120_000 } = {}) {
     const child = spawn(command, args, {
       cwd: root,
       windowsHide: true,
+      env: { ...process.env, TMP: integrationRoot, TEMP: integrationRoot, TMPDIR: integrationRoot },
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";
@@ -286,7 +289,7 @@ const emptyPlanUploadPath = join(integrationRoot, "present-empty-plan.txt");
 const readyDuplicateUploadPath = join(integrationRoot, "ready-duplicate.txt");
 const stoppedFirstUploadPath = join(integrationRoot, "stopped-first.txt");
 const stoppedSecondUploadPath = join(integrationRoot, "stopped-second.txt");
-const snapshotRoot = join(tmpdir(), "teal-eval-bulk-files-private-v1");
+const snapshotRoot = join(integrationRoot, "teal-eval-bulk-files-private-v1");
 const uploadBytes = Buffer.from("local direct upload regression\n", "utf8");
 const uploadSha256 = createHash("sha256").update(uploadBytes).digest("hex");
 await writeFile(uploadPath, uploadBytes);
@@ -304,7 +307,7 @@ let browser;
 let browserLog = "";
 try {
   await assertLoopbackPortAvailable(8769);
-  server = spawn("python", [serverPath], {
+  server = spawn(process.env.PYTHON || "python", [serverPath], {
     cwd: root,
     windowsHide: true,
     env: { ...process.env, TEAL_MOCK_PORT: "8769" },
@@ -349,6 +352,13 @@ try {
   if (!context) throw new Error("Chromium exposed no browser context over loopback CDP.");
   const page = context.pages().find((candidate) => candidate.url() === fixtureUrl);
   if (!page) throw new Error(`The dedicated Chromium process did not load only ${fixtureUrl}.\n${browserLog}`);
+  await page.route(fixtureUrl, async (route) => {
+    const response = await route.fetch();
+    const html = (await response.text()).replaceAll("Add file", idleAddLabel);
+    await route.fulfill({ response, body: html });
+  });
+  await page.reload();
+  assert.equal(await page.locator("button.add").textContent(), idleAddLabel);
   await page.locator("#teal-eval-bulk-files-v1-button").waitFor({ state: "attached", timeout: 20_000 });
   const loadedHttpPages = context.pages().map((candidate) => candidate.url()).filter((url) => /^https?:/iu.test(url));
   assert.deepEqual(loadedHttpPages, [fixtureUrl], "the dedicated browser must load only the local TAB-TEST HTTP page");
@@ -530,6 +540,7 @@ try {
   process.stdout.write(`${JSON.stringify({
     ok: true,
     fixtureUrl,
+    idleAddLabel,
     browserProfileWasTemporary: true,
     planWasNonMutating: true,
     applyDispatchCount: 1,

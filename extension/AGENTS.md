@@ -16,7 +16,7 @@ node <extension-root>/teal-eval-bulk-cli.mjs --persistent-bridge <absolute-stdio
 node <extension-root>/teal-eval-bulk-cli.mjs --persistent-bridge <absolute-stdio-proxy-path> --issue DEMO-204 apply-upload <returned-token>
 ```
 
-Node 24, extension 0.10.0, and persistent gateway 0.1.3 are required. The raw Node CLI keeps its native default for compatibility; the explicit flag above selects API mode. Use the existing chosen browser session. Do not launch a separate Chrome client.
+Node 24, extension 0.10.1, and persistent gateway 0.1.3 are required. The raw Node CLI keeps its native default for compatibility; the explicit flag above selects API mode. Use the existing chosen browser session. Do not launch a separate Chrome client.
 
 ## Result checks
 

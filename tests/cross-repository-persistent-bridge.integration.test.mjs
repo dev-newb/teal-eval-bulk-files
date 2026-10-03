@@ -124,12 +124,12 @@ function resultFor(envelope) {
     ok: true,
     issueIdentifier: 'TAB-TEST',
     persistentBridgeProtocolVersion: 1,
-    extensionVersion: '0.10.0',
+    extensionVersion: '0.10.1',
     documentId,
     targetUrl: pageUrl,
   };
   if (command === 'status') return { ok: true, operation: 'status', transport: 'local-test', inventoryCount: 0 };
-  if (command === 'list') return { ok: true, operation: 'list', files: [] };
+  if (command === 'list') return { ok: true, operation: 'list', inventory: [] };
   if (typeof command === 'string' && command.startsWith('apply-')) {
     return { ok: true, operation: command.slice('apply-'.length), succeeded: [], skipped: [], failed: [], remaining: [] };
   }
@@ -139,7 +139,7 @@ function resultFor(envelope) {
 function terminalMarker(envelope) {
   const payload = {
     protocolVersion: 1,
-    extensionVersion: '0.10.0',
+    extensionVersion: '0.10.1',
     documentId,
     requestId: envelope.requestId,
     targetUrl: pageUrl,
@@ -817,7 +817,8 @@ test('real bridge and public CLI keep isolated transport failures explicit', asy
         assert.equal(run.exitCode, 0, `${command} did not return exit code 0. ${run.stderr}`);
         assert.equal(run.json.ok, true);
         assert.equal(run.json.command, command);
-        assert.equal(run.json.operation, command);
+        if (command === 'status') assert.equal(run.json.operation, command);
+        else assert.deepEqual(run.json.inventory, []);
         assert.equal(run.json.issueIdentifier, 'TAB-TEST');
       }
     } finally {

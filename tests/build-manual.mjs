@@ -53,7 +53,7 @@ figure{margin:26px 0 32px}figure img{display:block;width:100%;height:auto;border
 @media(max-width:950px){aside{position:static;width:auto;padding:22px}nav{display:flex;gap:10px;flex-wrap:wrap}nav a{padding:3px;border:0}.edition{margin-bottom:12px}.print{width:auto;padding:8px 18px;margin-top:12px}main{margin:0;padding:20px}article{padding:28px 24px}h1{font-size:30px}}
 @media print{aside{display:none}body{background:white;font-size:10pt}main{margin:0;padding:0}article{max-width:none;padding:0;border:0;box-shadow:none}h1{font-size:24pt}h2{font-size:18pt;break-before:page}h3{break-after:avoid}figure,table,pre{break-inside:avoid}figure img{max-height:8in;object-fit:contain;border-radius:3px}pre{white-space:pre-wrap;overflow:visible;font-size:8pt}a{color:inherit}footer{display:none}@page{size:A4;margin:16mm}
 </style></head><body>
-<aside><div class="brand">Teal Eval<br>Bulk Files</div><div class="edition">USER &amp; AGENT MANUAL · 0.10.0</div><nav>${navigation}</nav><button class="print" onclick="window.print()">Print / Save PDF</button></aside>
+<aside><div class="brand">Teal Eval<br>Bulk Files</div><div class="edition">USER &amp; AGENT MANUAL · 0.10.1</div><nav>${navigation}</nav><button class="print" onclick="window.print()">Print / Save PDF</button></aside>
 <main><article>${body}</article><footer>Offline edition. All screenshots are embedded. Documentation uses a fictional local eval page. External reference links require an internet connection.</footer></main>
 </body></html>`;
 await writeFile(resolve(docs, 'manual.html'), html);

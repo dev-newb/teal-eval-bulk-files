@@ -32,7 +32,7 @@
   const BRIDGE_PLAN_TTL_MS = 60 * 60 * 1000;
   const BRIDGE_AUTHORIZATION_PATTERN = /^[A-Za-z0-9-]{16,80}$/;
   const PERSISTENT_BRIDGE_PROTOCOL_VERSION = 1;
-  const PERSISTENT_BRIDGE_EXTENSION_VERSION = "0.10.0";
+  const PERSISTENT_BRIDGE_EXTENSION_VERSION = "0.10.1";
   const PERSISTENT_BRIDGE_REQUEST_PATTERN = /^[A-Za-z0-9_-]{16,80}$/;
   const PERSISTENT_BRIDGE_UPLOAD_TTL_MS = 5 * 60 * 1000;
   const PERSISTENT_BRIDGE_RESULT_TTL_MS = 15 * 60 * 1000;
@@ -568,6 +568,11 @@
     return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
+  // The page labels its idle upload control "Add file" (older builds) or "Add files" (current builds).
+  function isIdleAddLabel(text) {
+    return /^Add files?$/.test(String(text || "").trim());
+  }
+
   function findNativePanel() {
     const headings = [...document.querySelectorAll("strong")]
       .filter((element) => element.textContent?.trim() === "Staged files");
@@ -578,7 +583,7 @@
       const nativeInput = [...(header?.querySelectorAll('input[type="file"]') || [])]
         .find((input) => input !== ui.fileInput);
       const nativeAddButton = [...(header?.querySelectorAll("button") || [])]
-        .find((button) => button.id !== BUTTON_ID && /^(Add file|Uploading…|Uploading\.\.\.|Finalizing…|Finalizing\.\.\.)$/.test(button.textContent?.trim() || ""));
+        .find((button) => button.id !== BUTTON_ID && (isIdleAddLabel(button.textContent) || /^(Uploading…|Uploading\.\.\.|Finalizing…|Finalizing\.\.\.)$/.test(button.textContent?.trim() || "")));
 
       if (header && container && nativeInput && nativeAddButton) {
         return { heading, header, container, nativeInput, nativeAddButton };
@@ -938,7 +943,7 @@
     while (Date.now() - startedAt < UPLOAD_START_TIMEOUT_MS && Date.now() < batchDeadline) {
       const panel = findNativePanel();
       const inputIsReset = panel && !panel.nativeInput.value && (!panel.nativeInput.files || panel.nativeInput.files.length === 0);
-      const isReady = panel && !nativeListIsLoading(panel) && !panel.nativeAddButton.disabled && panel.nativeAddButton.textContent?.trim() === "Add file" && inputIsReset;
+      const isReady = panel && !nativeListIsLoading(panel) && !panel.nativeAddButton.disabled && isIdleAddLabel(panel.nativeAddButton.textContent) && inputIsReset;
       if (isReady) {
         readySince ||= Date.now();
         if (Date.now() - readySince >= UPLOAD_READY_STABLE_MS) return panel;
@@ -948,7 +953,7 @@
       await sleep(150);
     }
     if (Date.now() >= batchDeadline) throw uploadBatchDeadlineError();
-    throw new Error("The page's Add file control and file input did not become stably ready.");
+    throw new Error("The page's Add file(s) control and file input did not become stably ready.");
   }
 
   async function uploadOneFile(file, queueIndex, totalCount, batchDeadline) {
@@ -978,7 +983,7 @@
       const currentRows = readNativeRowsFromPanel(currentPanel);
       const addedRow = currentRows.find((row) => row.filename === file.name && !beforeKeys.has(rowKey(row)));
       const addText = currentPanel.nativeAddButton.textContent?.trim() || "";
-      const isBusy = currentPanel.nativeAddButton.disabled || addText !== "Add file";
+      const isBusy = currentPanel.nativeAddButton.disabled || !isIdleAddLabel(addText);
       sawBusy ||= isBusy;
 
       const error = nativeErrorText(currentPanel);

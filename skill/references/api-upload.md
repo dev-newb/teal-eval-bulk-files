@@ -1,6 +1,6 @@
 # Optional API uploads
 
-Requires extension and CLI 0.10.0. Persistent transport still requires bridge 0.1.3.
+Requires extension and CLI 0.10.1 (API uploads were introduced in 0.10.0). Persistent transport still requires bridge 0.1.3.
 
 The wrapper accepts `-UploadMode native|api` for `plan-upload`, `apply-upload`, `list`, and `verify`. It defaults to API for plan-upload, list, and verify. The raw Node CLI accepts `--upload-mode native|api` and keeps native as its compatibility default. An apply with no explicit method uses the saved token's method. An explicit mismatch is rejected before transfer.
 
