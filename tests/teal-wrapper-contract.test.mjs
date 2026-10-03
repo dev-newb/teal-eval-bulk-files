@@ -209,7 +209,7 @@ test("PowerShell wrapper preserves persistent mapping, parameter sets, version g
       "-ExtensionRoot", extensionRoot
     ]);
     assert.notEqual(browserWait.code, 0);
-    assert.match(browserWait.stderr, /parameter set cannot be resolved|parameters cannot be used together/iu);
+    assert.match(browserWait.stderr, /parameter\s+set cannot be resolved|parameters cannot be used together/iu);
     assert.equal(browserWait.stdout, "");
 
     const missingPersistentPath = join(temp, "missing-persistent-proxy.mjs");
