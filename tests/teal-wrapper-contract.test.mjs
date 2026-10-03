@@ -50,7 +50,7 @@ test("PowerShell wrapper source preserves aliases, transport parameter sets, and
   assert.match(wrapperSource, /ParameterSetName\s*=\s*'Cdp'[\s\S]*?\$CdpEndpoint/u);
   assert.match(wrapperSource, /ParameterSetName\s*=\s*'Browser'[\s\S]*?\$Browser/u);
   assert.match(wrapperSource, /\[Alias\('Names',\s*'Files',\s*'Paths',\s*'PlanToken'\)\][\s\S]*?\$Operands/u);
-  assert.match(wrapperSource, /\$manifest\.version\s*-ne\s*'0\.10\.0'/u);
+  assert.match(wrapperSource, /\$manifest\.version\s*-ne\s*'0\.10\.1'/u);
   assert.match(wrapperSource, /'--persistent-bridge',\s*\$resolvedPersistentBridgePath/u);
   assert.match(wrapperSource, /'--bridge-wait-seconds',\s*\[string\]\$BridgeWaitSeconds/u);
   assert.match(wrapperSource, /'--target-id',\s*\$TargetId/u);
@@ -185,7 +185,7 @@ test("PowerShell wrapper preserves persistent mapping, parameter sets, version g
       "-ExtensionRoot", extensionRoot
     ]);
     assert.notEqual(mutuallyExclusive.code, 0);
-    assert.match(mutuallyExclusive.stderr, /parameter set cannot be resolved|parameters cannot be used together/iu);
+    assert.match(mutuallyExclusive.stderr, /parameter\s+set cannot be resolved|parameters cannot be used together/iu);
     assert.equal(mutuallyExclusive.stdout, "");
 
     for (const invalidWait of ["0", "301"]) {
@@ -244,7 +244,7 @@ test("PowerShell wrapper preserves persistent mapping, parameter sets, version g
       "-ExtensionRoot", oldExtensionRoot
     ], { TEAL_FAKE_MCP_STATE: join(temp, "old-version.fake") });
     assert.notEqual(oldVersion.code, 0);
-    assert.match(oldVersion.stderr, /requires Teal Eval Bulk Files 0\.10\.0\. Found 0\.9\.3/iu);
+    assert.match(oldVersion.stderr, /requires Teal Eval Bulk Files 0\.10\.1\. Found 0\.9\.3/iu);
     assert.equal(oldVersion.stdout, "");
 
     const failedApply = await runPowerShell([

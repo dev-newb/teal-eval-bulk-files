@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.10.1 - 2026-10-02
+
+A compatibility release for the current Teal eval page. There are no changes to plans, tokens, safety checks, API upload or the CLI command set.
+
+### Fixed
+
+- The extension again finds the **Staged files** panel on current page builds. The page now labels its upload button **Add files**; older builds used **Add file**. One label test, `isIdleAddLabel()`, accepts both and is used in three places:
+  - finding the panel;
+  - the upload-ready check;
+  - the busy check during native uploads.
+- On 0.10.0 the new label hid the panel, so these failed with "The staged-files panel is not present": plan-delete and apply-delete, download plans, native-mode `list`, and native uploads. API-mode `list` and API uploads were not affected.
+- The **Bulk files** button appears beside the upload button again.
+
+### Changed
+
+- Version 0.10.1 everywhere the release is pinned:
+  - `extension/manifest.json`;
+  - the bridge version constants in `content.js` and `persistent-mcp-client.mjs`;
+  - `package.json` and `package-lock.json`;
+  - the skill wrapper's version check (`skill/scripts/invoke-teal-cli.ps1`) and the skill's requirement notes;
+  - the test manifest, its generator and the cross-repository bridge test fixture.
+- After updating, reload the unpacked extension in `chrome://extensions` and refresh open eval tabs. The CLI and the extension check that their versions match, so a CLI at 0.10.1 refuses to drive a browser still running 0.10.0 until the reload.
+
 ## Documentation - 2026-09-27
 
 - Add an illustrated user manual for upload, API upload, duplicates, download, deletion, confirmations, progress, errors, and stop controls.

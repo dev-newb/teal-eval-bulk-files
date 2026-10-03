@@ -20,7 +20,8 @@ const releaseDocs = [
   "extension/README.md",
   "docs/cli-guide.md",
   "skill/SKILL.md",
-  "skill/references/cli-contract.md"
+  "skill/references/cli-contract.md",
+  "docs/manual.md"
 ];
 const agentSafetyDocs = [
   "README.md",
@@ -85,7 +86,7 @@ for (const relativePath of expectedImages) {
 
 for (const relativePath of releaseDocs) {
   const content = await readFile(resolve(root, relativePath), "utf8");
-  if (!content.includes("0.10.0")) failures.push(`${relativePath}: does not name release 0.10.0.`);
+  if (!content.includes("0.10.1")) failures.push(`${relativePath}: does not name release 0.10.1.`);
   if (!content.includes("0.1.3")) failures.push(`${relativePath}: does not name required bridge 0.1.3.`);
 }
 for (const relativePath of agentSafetyDocs) {

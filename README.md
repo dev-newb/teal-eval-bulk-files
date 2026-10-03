@@ -7,7 +7,7 @@ Teal Eval Bulk Files adds reliable batch file controls to Tacit Teal eval issue 
 - a Codex skill that selects an open browser session and calls the CLI;
 - a complete local-only demonstration page and repeatable screenshot tests.
 
-Current release: `0.10.0`.
+Current release: `0.10.1`.
 
 **[Read the illustrated user and agent manual](docs/manual.md)** for installation, every file workflow, agent access, and direct `.mjs` CLI use. An [offline HTML edition](docs/manual.html) includes the screenshots in one file; download it and open it in a browser.
 
@@ -86,7 +86,7 @@ If the skill is not kept beside the repository's `extension` directory, set `TEA
 
 The CLI attaches to an already open browser session. It does not launch a browser, log in, or navigate. Select the exact browser or session first. The wrapper then requires exactly one transport: an explicit persistent stdio-proxy path, a current Chrome or Edge session, or an explicit loopback CDP endpoint.
 
-The [Chrome DevTools MCP persistent bridge](https://github.com/esmaesx/chrome-devtools-mcp-persistent-bridge) is an optional transport for a user-selected Chrome session. Teal Eval Bulk Files 0.10.0 requires bridge 0.1.3. Keep the bridge checkout separate from this repository, and pass the absolute path to its `runtime/stdio-proxy.mjs` file. The portable wrapper has no machine-specific path default:
+The [Chrome DevTools MCP persistent bridge](https://github.com/esmaesx/chrome-devtools-mcp-persistent-bridge) is an optional transport for a user-selected Chrome session. Teal Eval Bulk Files 0.10.1 requires bridge 0.1.3. Keep the bridge checkout separate from this repository, and pass the absolute path to its `runtime/stdio-proxy.mjs` file. The portable wrapper has no machine-specific path default:
 
 ```powershell
 & .\skill\scripts\invoke-teal-cli.ps1 `

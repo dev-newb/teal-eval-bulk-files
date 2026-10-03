@@ -5,7 +5,7 @@ description: Manage and verify staged files on Tacit Teal eval issue pages throu
 
 # Teal Eval Bulk CLI
 
-Use the version 0.10.0 CLI in the repository's `extension` directory. Persistent mode requires Chrome DevTools MCP persistent bridge 0.1.3. The wrapper resolves the CLI from, in order:
+Use the version 0.10.1 CLI in the repository's `extension` directory. Persistent mode requires Chrome DevTools MCP persistent bridge 0.1.3. The wrapper resolves the CLI from, in order:
 
 1. the explicit `-ExtensionRoot` value;
 2. `TEAL_EVAL_BULK_EXTENSION_ROOT`;

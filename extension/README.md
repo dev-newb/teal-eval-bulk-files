@@ -70,9 +70,11 @@ For deletions, the final confirmation shows the exact filename and the first eig
 
 The current interface already shows SHA-256 prefixes in delete review and per-file progress during upload, download, and delete work. Version 0.10.0 adds an Upload method selector for native or Direct API upload.
 
+Version 0.10.1 is a compatibility release: it recognises the page's upload button whether it reads **Add file** or **Add files**, so the staged-files panel, deletion and native upload work on current page builds.
+
 ## Local CLI (optional)
 
-`teal-eval-bulk-cli.mjs` is a dependency-free Node 24 tool for an already open browser. Version 0.10.0 supports planned upload, download, deletion, and read-only verification through an optional persistent MCP transport. It requires Chrome DevTools MCP persistent bridge 0.1.3. Keep the bridge checkout separate from this repository. The transport uses the reviewed stdio proxy and the existing long-running Chrome backend. It does not read the daemon token or connect to the daemon pipe. It does not launch a browser, open a tab, navigate a page, read cookies, or read credential stores.
+`teal-eval-bulk-cli.mjs` is a dependency-free Node 24 tool for an already open browser. Version 0.10.1 supports planned upload, download, deletion, and read-only verification through an optional persistent MCP transport. It requires Chrome DevTools MCP persistent bridge 0.1.3. Keep the bridge checkout separate from this repository. The transport uses the reviewed stdio proxy and the existing long-running Chrome backend. It does not read the daemon token or connect to the daemon pipe. It does not launch a browser, open a tab, navigate a page, read cookies, or read credential stores.
 
 ```text
 node teal-eval-bulk-cli.mjs --persistent-bridge <path-to-stdio-proxy.mjs> --issue DEMO-204 status
@@ -149,5 +151,5 @@ The extension runs only on Teal Alpha issue pages. Its production content-script
 - A ZIP can contain at most 500 files, 256 MB per file, and 512 MB of source data. The ZIP uses no compression, so its size is close to the total source size.
 - During ZIP preparation, **Stop after current file** stops before the next source file. It saves no partial ZIP and keeps the complete selection.
 - During upload, **Stop after current file** does not cancel a file that the Teal page already started. During deletion, **Stop deletion** cancels the countdown or stops before the next file.
-- The extension depends on the visible labels **Staged files**, **Add file**, and **remove**. It fails closed if these controls are not present.
+- The extension depends on the visible labels **Staged files**, **Add file** or **Add files** (both page versions are recognised), and **remove**. It fails closed if these controls are not present.
 - This is an unpacked local extension. It is not published in the Chrome Web Store.
